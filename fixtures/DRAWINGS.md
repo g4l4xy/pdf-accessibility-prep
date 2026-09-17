@@ -1,0 +1,1 @@
+isometric-vector.pdf, isometric-nested-cad.pdf, and isometric-scanned.pdf are synthetic two-sheet software fixtures with dimension labels, thin/hidden edges and rotated views. See ../docs/DRAWINGS.md. They are not manufacturing drawings or user coursework.

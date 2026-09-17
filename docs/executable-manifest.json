@@ -1,0 +1,11 @@
+{
+  "filename": "PDF-Accessibility-Prep-Simple-Review.exe",
+  "size_bytes": 136631820,
+  "sha256": "86f00fa5f50089ff6e91931de25c6bdb1331928498b2acb42701bf2f8a45d204",
+  "machine": "AMD64 (x64)",
+  "update": "Simple guided manual review",
+  "windows_targeted_tests": 5,
+  "packaged_checks": 11,
+  "manual_native_workflow_verified": false,
+  "offline_test_scope": "Earlier drawing build; current update changes only the review UI."
+}

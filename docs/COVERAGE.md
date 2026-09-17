@@ -1,0 +1,38 @@
+# Accessibility coverage and limits
+
+This is a conservative remediation utility, not a universal automatic accessibility converter. The batch requirement is implemented now. Unsupported document semantics remain explicit draft issues rather than deferred processing steps or fabricated passes.
+
+| Area | Implemented behavior | Limits and remaining review |
+|---|---|---|
+| Batch selection | Multi-select picker, multiple local drops, incremental additions, individual Remove, Clear All | Adding/removing is disabled while a processing or save operation is running |
+| Duplicates | File identity/path detection, plus streaming SHA-256 duplicate-content detection before parsing | Identical copies are skipped; same-named distinct content remains separate |
+| Batch execution | One isolated process at a time, per-file and overall status, failures do not stop later files | 512 MB input, 2,000 pages, 10 minutes and 1.5 GiB monitored worker-tree RSS per file |
+| Cancellation | Kills current worker and descendants; prior results retained; cancelled files resumable | Workers run under the user's account, not an OS security sandbox; memory monitoring is periodic, not a hard kernel limit |
+| Born-digital text | MCID marked content, real StructElem/ParentTree/Pg associations for supported text-show operators | Automatic granularity is a text-show operator, not inferred semantic paragraph hierarchy. Human review supplies roles/order. No universal multi-column semantic inference |
+| Existing tagged PDFs | Preserve existing tree/content relationships and inherited declarations during initial preparation; validate actual output | Complex nested structures are preserved. The editor only reorders sibling elements; other repairs require a specialist |
+| Scanned and mixed PDFs | Local English OCR on raster content; invisible embedded-font text layer; original page artwork retained | No recognition confidence score is claimed. Every recognized page is flagged. Rotated text spans that cannot be placed reliably are flagged. Mixed pages with large images and existing text avoid repeat OCR |
+| Reading order and headings | Keyboard Move up/down changes structure child order; P and H1–H6 roles | No cross-page or different-parent reparenting. Labels are mapped to extracted text only when counts align. Complex correspondence needs specialist review |
+| Images | Real Figure elements and Alt descriptions; explicit selected artifact conversion | Never generates descriptions or assumes all images are decorative. Complex pre-existing parent trees may require a specialist for artifact editing |
+| Tables | User-selected simple cells become Table/TR/TH/TD with column Scope on the first row | No automatic cell inference, merged cells, multi-level headers, or general header-ID association. Graphics/table concerns remain flagged where not safely resolved |
+| Lists | Selected text items become L/LI/LBody | Complex nested lists and separately tagged labels require a specialist |
+| Text correction | User correction writes ActualText to the corresponding structure element | This changes accessible replacement text, not source glyphs, visible typography, or the OCR engine's original recognition confidence |
+| Title/language | Meaningful filename fallback, existing metadata preserved where available, working correction controls | Default en must be explicitly reviewed. Language code syntax is checked; per-span multilingual tagging is unsupported |
+| Fonts and Unicode | Preserve existing resources, flag unembedded fonts and replacement characters; bundled font for new OCR text | No font-license guessing, arbitrary font embedding, or generalized broken-CMap reconstruction |
+| Links/bookmarks | Preserve source objects; bookmark preservation asserted | Link annotation tagging/OBJR repair is not automatic; links require specialist review |
+| Forms | Preserve fields and appearances, flag specialist review | Does not repair form behavior or validate assistive interaction |
+| Engineering diagrams/isometric drawings/charts | Preserve vector paths/styles and scale; tag vector painting and supported untagged nested CAD Forms as Figures; same-window multi-paragraph descriptions | No inference of geometry, dimensions, tolerances or teaching intent. Nested Figure descriptions must cover internal text. Semantically pre-marked/recursive/unsupported artwork remains a specialist issue |
+| Equations | Preserve visuals and flag interpretation | No automatic math recognition or semantic formula tagging |
+| Contrast/color | Required human check; graphics and other unresolved concerns retained | No automated contrast/color-only proof; never recolors the source |
+| Visual quality | Exact pixel hashes per corresponding page, source-text preservation, all five page boxes, UserUnit, effective dimensions, vector paths/line styles, rotation, and bookmarks checked | At most 108 dpi / 1,800 pixels longest side; no cross-renderer or every-scale proof. Does not recover source detail |
+| Independent validation | veraPDF 1.28.2 forced `--flavour ua1`; raw XML parsed for actual version/profile/failures | Automated PDF/UA rules only, not full WCAG or legal evaluation. Missing/timeout/error/wrong-profile result is never a pass |
+| Conformance declarations | Does not add a PDF/UA declaration to newly tagged files. Keeps existing declarations during preservation; removes inherited assertions on material review edits | A new/remediated file can fail the declaration requirement even when other machine checks pass. An external qualified conformance evaluation/export is needed before declaring PDF/UA |
+| Reports | Separate escaped HTML report, actual final SHA-256, fixes, issues/pages, human checks/corrections, validator version/profile/results | Reports include intentional document-related corrections; they are sensitive document artifacts, not telemetry |
+| Saving | One folder selection, separate PDF/report pairs, exclusive filename reservation, suffix collisions, hash verification, per-file error continuation | A crash/power loss during saving can leave a partial file pair; normal save exceptions remove that attempt. A two-file atomic transaction is not claimed |
+| Privacy | No runtime networking, document script execution, attachment launch, or external URL following | Embedded active content is preserved and flagged. Opening an output in an external viewer is outside the worker's control |
+| Temporary files | Private temporary session directory, originals/snapshots retained only for the session, cleanup on removal/clear/normal exit; failed/cancelled initial jobs cleaned | Abrupt termination can leave temporary directories. No forensic secure deletion is claimed |
+| App accessibility | Native Qt controls, names/labels, keyboard shortcuts, keyboard order buttons, system palette, resizable scrollable layout | Windows high contrast, 200% scaling, Narrator/NVDA, and real PDF screen-reader behavior require manual acceptance |
+| Brightspace | D2L-documented PDF output; strict parse/syntax, page presence and unencrypted-output checks, recorded file size | Per user instruction, documentation and local files only. No institution or live LMS upload was tested; assignment restrictions, permissions and configured limits still apply |
+
+No source document is overwritten, merged, summarized, reworded, rasterized wholesale, or downsampled by design. A failed visual preservation check rejects the candidate instead of silently accepting altered content.
+
+“Checks passed and review recorded” is deliberately narrower than “ready for publication.” The application never sets a publication-ready flag or presents a legal certification.

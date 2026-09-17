@@ -1,0 +1,15 @@
+__pycache__/
+.pytest_cache/
+.build-venv/
+build/
+dist/
+*.pyc
+resources/jre/
+
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+*.exe
+release-assets/
