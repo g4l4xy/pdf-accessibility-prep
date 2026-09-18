@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "filename": "PDF-Accessibility-Prep-Automatic.exe",
+  "size_bytes": 136653797,
+  "sha256": "08e7cdf212fcd19900eb3c9599d1550674517a0e914d8bd3d01ca7b7b5ae5fe9",
+  "machine": "AMD64 (x64)",
+  "update": "Automatic preparation first; explicit optional manual review; clear batch saving",
+  "mac_regression_tests": 48,
+  "mac_final_ui_tests": 16,
+  "windows_regression_tests": 48,
+  "windows_final_ui_tests": 16,
+  "packaged_checks": 15,
+  "test_environment": "Windows 11 ARM64 in Parallels, x64 emulation",
+  "manual_native_workflow_verified": false,
+  "offline_test_scope": "Earlier drawing build only; no new offline run claimed."
+}

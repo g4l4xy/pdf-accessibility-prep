@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "checks": {
+    "independent_ua1_fixture": true,
+    "selection_deduplication": true,
+    "isolated_workers_and_failure_continuation": true,
+    "valid_existing_preserved": true,
+    "automatic_pass_without_forced_review": true,
+    "uncertain_scan_stays_draft": true,
+    "review_revalidates_actual_final": true,
+    "bundled_english_ocr": true,
+    "page_preservation": true,
+    "isometric_vector_preservation_and_description": true,
+    "nested_cad_preserved_and_tagged": true,
+    "brightspace_documented_pdf_format": true,
+    "bundled_interface_font": true,
+    "manual_review_only_after_user_choice": true,
+    "save_all_pdf_and_report": true
+  },
+  "failure": null,
+  "fixture_outcomes": [
+    {
+      "fixture": "tagged.pdf",
+      "status": "Automatic checks passed",
+      "error": ""
+    },
+    {
+      "fixture": "scan.pdf",
+      "status": "Review needed \u2014 draft",
+      "error": ""
+    },
+    {
+      "fixture": "damaged.pdf",
+      "status": "Failed",
+      "error": "This PDF could not be processed safely. Try exporting it again from the source."
+    },
+    {
+      "fixture": "five.pdf",
+      "status": "Review needed \u2014 draft",
+      "error": ""
+    }
+  ],
+  "platform": "win32",
+  "frozen": true,
+  "network_disabled_by_test": false,
+  "executable_sha256": "08e7cdf212fcd19900eb3c9599d1550674517a0e914d8bd3d01ca7b7b5ae5fe9",
+  "note": "This self-test does not replace clean-Windows offline or screen-reader acceptance testing."
+}

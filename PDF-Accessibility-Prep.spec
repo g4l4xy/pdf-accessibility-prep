@@ -4,7 +4,7 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 root = Path(SPECPATH)
 datas = [(str(root / 'resources'), 'resources'), (str(root / 'README.md'), '.'),
-         (str(root / 'LICENSE'), '.'), (str(root / 'THIRD-PARTY-NOTICES.md'), '.')]
+         (str(root / 'LICENSE'), '.'), (str(root / 'AUTHORS.md'), '.'), (str(root / 'TERMS.md'), '.'), (str(root / 'THIRD-PARTY-NOTICES.md'), '.')]
 binaries = []
 hiddenimports = ['pdfprep.app', 'pdfprep.batch', 'pdfprep.engine', 'pdfprep.structure',
                  'pdfprep.selftest', 'pdfprep.fixtures']

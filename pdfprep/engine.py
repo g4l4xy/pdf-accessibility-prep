@@ -91,7 +91,6 @@ def add_ocr(source, destination, issue, fixes, emit):
                 continue
             # Partial OCR does not recreate an existing text layer. It covers images
             # on mixed pages as well as full scanned pages.
-            issue('ocr', i + 1, 'Check recognized text against the image, including numbers and symbols. Correct uncertain words in the content list.', True)
             if not (data / 'eng.traineddata').exists() or not font.exists():
                 issue('ocr_missing', i + 1, 'Local English recognition data or its font is missing. Obtain a complete application build or add text in the source document.', False)
                 continue
@@ -120,9 +119,10 @@ def add_ocr(source, destination, issue, fixes, emit):
                                          overlay=True)
                         inserted += 1
             if inserted:
+                issue('ocr', i + 1, 'Text was recognized from an image. Check the words, numbers and symbols against the original; OCR cannot guarantee their accuracy.', True)
                 changed = True
                 fixes.append(f'Page {i + 1}: added {inserted} invisible English OCR text spans without replacing the page image.')
-            else:
+            elif not page.get_text().strip() and any(fitz.Rect(img['bbox']).get_area() > page.rect.get_area() * .7 for img in page.get_image_info()):
                 issue('ocr_empty', i + 1, 'No reliable additional text was recognized. Check the image or obtain a clearer original.', False)
         if changed:
             doc.save(destination, garbage=0, deflate=False)
@@ -165,7 +165,7 @@ def prepare(source, directory, options=None, emit=lambda *a: None):
                 issue('active_content', None, 'Embedded active content was not executed. Remove or assess it with the document owner before distribution.', False)
         existing = '/StructTreeRoot' in pdf.Root
         title = str(pdf.docinfo.get('/Title', '')).strip() or source.stem.replace('_', ' ')
-        lang = str(pdf.Root.get('/Lang', '')).strip() or 'en'
+        lang = str(pdf.Root.get('/Lang', '')).strip() or options.get('default_language', 'en')
         metadata(pdf, options.get('title', title), options.get('language', lang), retain_claims=existing)
         title, lang = str(pdf.docinfo.Title), str(pdf.Root.Lang)
         issue('metadata', None, 'Confirm the document title and language below.', True)
@@ -178,9 +178,11 @@ def prepare(source, directory, options=None, emit=lambda *a: None):
     work = base
     ocr = directory / 'ocr.pdf'
     if not existing and add_ocr(base, ocr, issue, fixes, emit): work = ocr
+    layout_uncertain = set()
     with fitz.open(work) as view:
         page_text = [[l for l in p.get_text().splitlines() if l.strip()] for p in view]
         for i, page in enumerate(view):
+            if not simple_text_layout(page): layout_uncertain.add(i + 1)
             if page.get_drawings():
                 issue('graphics', i + 1, 'Check drawing geometry and labels. Describe meaningful vector graphics in the Figure description: object, view, dimensions and units, holes, hidden lines, and relationships. Verify diameter, radius, angle, tolerance and scale symbols against the original. Tables need table structure; equations or pre-tagged or unsupported nested CAD artwork need source or specialist remediation.', True)
             if page.get_links():
@@ -205,7 +207,7 @@ def prepare(source, directory, options=None, emit=lambda *a: None):
                     issue('existing_scan', i + 1, 'This tagged page has no extractable text. Its existing structure was preserved; assess whether OCR or other remediation is needed.', False)
         else:
             model = structure.build(pdf, page_text, issue)
-            fixes.append('Associated supported text, raster images, vector painting operators, and untagged nested artwork with MCIDs, structure elements, and a ParentTree. Reading roles require human review.')
+            fixes.append('Associated supported text, raster images, vector painting operators, and untagged nested artwork with MCIDs, structure elements, and a ParentTree. Complex reading roles may still need human review.')
         pdf.save(output, compress_streams=False, object_stream_mode=q.ObjectStreamMode.preserve)
     # Reopen to obtain final object numbers after writer renumbering.
     with q.open(output) as pdf:
@@ -215,6 +217,9 @@ def prepare(source, directory, options=None, emit=lambda *a: None):
         text_items = [m for m in final_model if m['page'] == page_num and m['kind'] == 'text']
         if len(text_items) == len(lines):
             for m, line in zip(text_items, lines): m['label'] = line[:200]
+    for figure in final_model:
+        if figure['kind'] == 'figure' and not figure.get('alt', '').strip():
+            issue('figures', figure['page'], 'A picture or drawing is missing its description. Explain what it shows; the app cannot safely invent its meaning or dimensions.', True)
     pages = render_and_compare(snapshot, output, directory, password, emit)
     validator = validation.validate(output, directory / 'validator.xml')
     compatibility = brightspace_check(output)
@@ -229,6 +234,7 @@ def prepare(source, directory, options=None, emit=lambda *a: None):
               'limitations': ['Pixel comparison is at up to 108 dpi and 1,800 pixels on the longest side, not a proof of all rendering behavior.',
                               'WCAG 2.1 AA human evaluation and Brightspace viewer testing are separate from PDF/UA machine checks.',
                               'Automatic structure is per supported text-show operator. Complex hierarchy and semantic interpretation require review.']}
+    classify_checks(result, existing=existing, uncertain_pages=layout_uncertain)
     refresh_status(result)
     (directory / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
     for transient in (base, ocr): transient.unlink(missing_ok=True)
@@ -250,10 +256,62 @@ def brightspace_check(path):
             'scope': 'D2L supports PDF in course Content and its embedded viewer. Course upload limits, assignment extension restrictions, and permissions must be checked in your institution. Format acceptance does not certify accessibility.',
             'source': 'https://community.d2l.com/brightspace/kb/articles/23030-what-types-of-files-can-i-use-for-course-content'}
 
-def refresh_status(result):
-    unresolved = [i for i in result['issues'] if not i['reviewed']]
+def simple_text_layout(page):
+    """Recognize only a uniform, single-column, top-to-bottom text layout.
+
+    This is a geometry check, not a claim that semantics or WCAG were verified.
+    Ambiguous columns, rotated lines, mixed type sizes and multi-span lines stay
+    explicit review items when building a new structure tree.
+    """
+    lines = [line for block in page.get_text('dict')['blocks']
+             for line in block.get('lines', []) if any(s.get('text', '').strip() for s in line.get('spans', []))]
+    if not lines: return True
+    spans = [line['spans'] for line in lines]
+    if any(len(v) != 1 for v in spans): return False
+    if any(tuple(line.get('dir', (1, 0))) != (1.0, 0.0) for line in lines): return False
+    if max(v[0]['size'] for v in spans) - min(v[0]['size'] for v in spans) > .5: return False
+    if len({(v[0].get('font'), v[0].get('flags')) for v in spans}) > 1: return False
+    left = [line['bbox'][0] for line in lines]
+    if max(left) - min(left) > 5: return False
+    return all(b['bbox'][1] >= a['bbox'][3] - 2 for a, b in zip(lines, lines[1:]))
+
+
+def classify_checks(result, existing=False, uncertain_pages=()):
+    """Keep general advice separate from a specific unresolved problem."""
     passed = result['validator']['status'] == 'passed'
-    result['status'] = 'Checks passed and review recorded' if passed and not unresolved else 'Review needed — draft'
+    for issue in result['issues']:
+        kind, page = issue['kind'], issue['page']
+        required = True
+        if kind in ('metadata', 'visual_accessibility', 'layers', 'empty'):
+            required = False
+        elif kind == 'reading':
+            required = not existing and page in uncertain_pages
+            if required:
+                issue['message'] = 'This page has columns, mixed text styles, rotated text or an uncertain reading order. Check the order and headings; the app has preserved the content rather than guessed.'
+        elif kind in ('graphics', 'figures', 'nested_drawing'):
+            figures = [e for e in result['elements'] if e['page'] == page and e['kind'] == 'figure']
+            required = any(not e.get('alt', '').strip() for e in figures) or (not existing and not figures)
+        elif kind in ('forms', 'links') and existing and passed:
+            required = False
+        elif kind == 'existing_scan':
+            figures = [e for e in result['elements'] if e['page'] == page and e['kind'] == 'figure']
+            required = not (figures and all(e.get('alt', '').strip() for e in figures))
+        issue['required'] = required
+    result['automatic_checks'] = {
+        'existing_structure_preserved': existing,
+        'simple_layout_pages': [p['page'] for p in result['pages'] if p['page'] not in uncertain_pages],
+        'note': 'General human checks are optional advice, not automatic accessibility certification.'}
+
+
+def refresh_status(result):
+    unresolved = [i for i in result['issues'] if i.get('required', True) and not i['reviewed']]
+    passed = result['validator']['status'] == 'passed'
+    compatible = result.get('brightspace', {}).get('status', 'PDF format checks passed') == 'PDF format checks passed'
+    result['needs_attention'] = bool(unresolved or not passed or not compatible)
+    if result['needs_attention']:
+        result['status'] = 'Review needed — draft'
+    else:
+        result['status'] = 'Checks passed and review recorded' if result['reviews'] else 'Automatic checks passed'
     result['publication_ready'] = False  # This utility never certifies publication or legal compliance.
 
 

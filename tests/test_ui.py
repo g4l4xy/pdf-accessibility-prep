@@ -46,7 +46,9 @@ def test_one_click_batch_and_save_all(app, tmp_path, monkeypatch):
     w.add([a, bad, b]); w.prepare(); finish(app, w)
     assert w.queue.items[0].result and w.queue.items[1].status == 'Failed' and w.queue.items[2].result
     w.files.selectRow(0); app.processEvents()
-    assert w.edit_box.isVisible() and w.questions.count() > 0
+    assert not w.review_box.isVisible()
+    assert w.attention_box.isVisible()
+    w.dismiss_attention(); assert not w.attention_box.isVisible()
     destination = tmp_path / 'out'; destination.mkdir(); calls = []
     def picker(*args): calls.append(1); return str(destination)
     monkeypatch.setattr(QFileDialog, 'getExistingDirectory', picker)

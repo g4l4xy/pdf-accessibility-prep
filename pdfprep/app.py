@@ -9,14 +9,17 @@ import shutil
 import tempfile
 import threading
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
-from PySide6.QtGui import QDesktopServices, QPixmap, QKeySequence, QShortcut
+from PySide6.QtGui import QDesktopServices, QPixmap, QKeySequence, QShortcut, QFontDatabase
 from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QProgressBar, QGroupBox, QLineEdit, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit,
     QScrollArea, QMessageBox, QSpinBox, QSplitter)
 from .model import Queue
+from . import __version__
+from .validation import resources
 from .batch import run_batch, isolated
 from .saving import save_all
+from .workflow import needs_attention, explanation, reasons
 
 
 class Task(QThread):
@@ -35,29 +38,59 @@ def button(text, fn, name=None):
     return b
 
 
+def configure_application(app):
+    """Use the bundled, licensed font instead of a platform-dependent fallback."""
+    if app.property('pdfprepFontConfigured'): return
+    font = app.font()
+    path = resources() / 'NotoSans-Regular.ttf'
+    if path.exists():
+        font_id = QFontDatabase.addApplicationFont(str(path))
+        families = QFontDatabase.applicationFontFamilies(font_id)
+        if families: font.setFamily(families[0])
+    font.setPointSize(11); app.setFont(font)
+    app.setProperty('pdfprepFontConfigured', True)
+
+
 class Window(QWidget):
     def __init__(self):
         super().__init__()
+        configure_application(QApplication.instance())
         self.queue = Queue(); self.cancel_event = threading.Event(); self.task = None
         self.session = tempfile.TemporaryDirectory(prefix='PDF-Accessibility-Prep-')
         try: os.chmod(self.session.name, 0o700)
         except OSError: pass
         self.output_folder = ''; self.active = None; self.reviewed = set(); self.tables = []; self.lists = []
         self.review_drafts = {}; self.loaded_review = None
-        self.setWindowTitle('PDF Accessibility Prep'); self.resize(1050, 790); self.setMinimumSize(720, 520)
+        self.review_open = False; self.review_all = False
+        self.setWindowTitle(f'PDF Accessibility Prep {__version__} — Eathan Huber'); self.resize(1000, 740); self.setMinimumSize(720, 520)
         self.setAcceptDrops(True)
         outer = QVBoxLayout(self)
-        self.instructions = QLabel('1. Add your PDFs.  2. Select Prepare PDFs.  3. Review flagged items.  4. Save All.\nFiles stay on this computer. Drop multiple PDFs anywhere in this window.')
+        heading = QLabel('Prepare your PDFs'); self.heading = heading; heading.setStyleSheet('font-size: 24px; font-weight: 600;'); outer.addWidget(heading)
+        self.instructions = QLabel('Everything runs on this computer. Manual review opens only when you choose it.')
         self.instructions.setWordWrap(True); outer.addWidget(self.instructions)
+        self.main_tools = QWidget(); self.main_tools_layout = QVBoxLayout(self.main_tools); self.main_tools_layout.setContentsMargins(0, 0, 0, 0); outer.addWidget(self.main_tools)
         row = QHBoxLayout()
         self.add_button = button('&Add PDFs', self.choose)
         self.clear_button = button('C&lear All', self.clear)
         self.prepare_button = button('&Prepare PDFs', self.prepare)
         self.cancel_button = button('&Cancel batch', self.cancel); self.cancel_button.setEnabled(False)
-        for b in (self.add_button, self.clear_button, self.prepare_button, self.cancel_button): row.addWidget(b)
-        row.addStretch(); outer.addLayout(row)
+        self.save_button = button('3. &Save prepared PDFs…', self.save)
+        self.add_button.setText('1. &Add PDFs'); self.prepare_button.setText('2. &Prepare PDFs')
+        for b in (self.add_button, self.prepare_button, self.save_button):
+            b.setMinimumHeight(38); row.addWidget(b)
+        self.main_tools_layout.addLayout(row)
+        save_hint = QLabel('Saving opens one folder picker and writes each prepared PDF plus its report. Unresolved files are saved as drafts.'); save_hint.setWordWrap(True); self.main_tools_layout.addWidget(save_hint)
+        settings = QHBoxLayout(); settings.addWidget(QLabel('Language when a PDF has none:'))
+        self.default_language = QComboBox(); self.default_language.addItems(['English', 'Spanish', 'French', 'German']); self.default_language.setAccessibleName('Default language for PDFs with no language set')
+        settings.addWidget(self.default_language); settings.addStretch(); settings.addWidget(self.clear_button); self.main_tools_layout.addLayout(settings)
+        self.attention_box = QGroupBox('Automatic preparation finished — some items need help')
+        notice = QVBoxLayout(self.attention_box); self.attention_text = QLabel(); self.attention_text.setWordWrap(True); self.attention_text.setTextFormat(Qt.PlainText); notice.addWidget(self.attention_text)
+        choices = QHBoxLayout(); self.review_now_button = button('Review now', self.review_flagged); self.not_now_button = button('Not now — keep drafts', self.dismiss_attention)
+        choices.addWidget(self.review_now_button); choices.addWidget(self.not_now_button); choices.addStretch(); notice.addLayout(choices); outer.addWidget(self.attention_box); self.attention_box.hide()
+        self.queue_label = QLabel('No PDFs added yet'); outer.addWidget(self.queue_label)
         split = QSplitter(Qt.Vertical); self.main_split = split; outer.addWidget(split, 1)
         self.files = QTableWidget(0, 3); self.files.setHorizontalHeaderLabels(['PDF', 'Status', 'Remove'])
+        self.files.verticalHeader().hide(); self.files.verticalHeader().setDefaultSectionSize(38); self.files.setAlternatingRowColors(True)
         self.files.setAccessibleName('PDF queue'); self.files.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.files.setSelectionMode(QAbstractItemView.SingleSelection); self.files.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.files.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -67,6 +100,7 @@ class Window(QWidget):
         split.addWidget(self.files)
         self.review_box = QGroupBox('Review needed'); self.review_box.setVisible(False)
         review_layout = QVBoxLayout(self.review_box)
+        self.close_review_button = button('Back to files', self.leave_review); review_layout.addWidget(self.close_review_button)
         self.review_scroll = QScrollArea(); self.review_scroll.setWidgetResizable(True)
         content = QWidget(); self.review_layout = QVBoxLayout(content)
         self.review_scroll.setWidget(content); review_layout.addWidget(self.review_scroll)
@@ -75,7 +109,7 @@ class Window(QWidget):
         self.review_layout.addWidget(self.detail)
         self.password = QLineEdit(); self.password.setEchoMode(QLineEdit.Password); self.password.setAccessibleName('PDF password')
         self.signature = QCheckBox('I authorize creating a derivative that may invalidate this digital signature.')
-        self.retry = button('Use this password / consent and retry with Prepare PDFs', self.retry_item)
+        self.retry = button('Continue preparation', self.retry_item)
         self.review_layout.addWidget(self.password); self.review_layout.addWidget(self.signature); self.review_layout.addWidget(self.retry)
         self.edit_box = QWidget(); form = QVBoxLayout(self.edit_box)
         self.metadata_box = QWidget(); metadata = QFormLayout(self.metadata_box); self.title_field = QLineEdit(); self.language = QLineEdit()
@@ -142,29 +176,35 @@ class Window(QWidget):
         note.setWordWrap(True); advanced_form.addWidget(note)
         self.navigation_box = QWidget(); navigation_layout = QVBoxLayout(self.navigation_box)
         navigation = QHBoxLayout()
-        self.back_button = button('← Back', lambda: self.review_step(-1))
+        self.back_button = button('Back', lambda: self.review_step(-1))
         self.skip_button = button('Not sure — leave for later', self.skip_review_step)
-        self.next_button = button('Next →', lambda: self.review_step(1))
+        self.next_button = button('Next', lambda: self.review_step(1))
         for widget in (self.back_button, self.skip_button, self.next_button): navigation.addWidget(widget)
         navigation_layout.addLayout(navigation)
         self.apply_button = button('Finish review for this PDF', self.apply_review); navigation_layout.addWidget(self.apply_button)
-        self.next_file_button = button('Review next PDF →', self.next_review_file); navigation_layout.addWidget(self.next_file_button)
+        self.next_file_button = button('Review next PDF', self.next_review_file); navigation_layout.addWidget(self.next_file_button)
         review_layout.addWidget(self.navigation_box)
         self.review_layout.addWidget(self.edit_box)
+        self.file_summary = QLabel('Drop PDFs here, or choose Add PDFs.'); self.file_summary.setWordWrap(True); self.file_summary.setTextFormat(Qt.PlainText); outer.addWidget(self.file_summary)
+        actions = QHBoxLayout(); self.manual_button = button('Manual review…', self.open_manual_review); self.manual_button.setEnabled(False)
+        self.input_button = button('Help with this file…', self.open_input); self.input_button.hide()
+        actions.addWidget(self.manual_button); actions.addWidget(self.input_button); actions.addStretch(); outer.addLayout(actions)
         self.progress = QProgressBar(); self.progress.setAccessibleName('Batch progress'); outer.addWidget(self.progress)
         self.status = QLabel('Add one or more PDFs to begin.'); self.status.setWordWrap(True); self.status.setTextFormat(Qt.PlainText); self.status.setAccessibleName('Batch status'); outer.addWidget(self.status)
         bottom = QHBoxLayout()
-        self.save_button = button('&Save All', self.save)
         self.folder_button = button('&Open Output Folder', self.open_folder); self.folder_button.setEnabled(False)
-        bottom.addWidget(self.save_button); bottom.addWidget(self.folder_button); bottom.addStretch()
+        bottom.addWidget(self.cancel_button); bottom.addWidget(self.folder_button); bottom.addStretch(); bottom.addWidget(QLabel('Created by Eathan Huber'))
         bottom.addWidget(button('&Help', self.help)); outer.addLayout(bottom)
         QShortcut(QKeySequence('Delete'), self.files, activated=self.remove_selected)
-        self.refresh()
+        self.refresh(); self.cancel_button.hide(); self.progress.hide()
 
     def busy(self): return self.task is not None and self.task.isRunning()
     def controls(self, busy):
         for w in (self.add_button, self.clear_button, self.prepare_button, self.save_button, self.apply_button, self.retry): w.setEnabled(not busy)
-        self.cancel_button.setEnabled(busy)
+        self.cancel_button.setEnabled(busy); self.cancel_button.setVisible(busy); self.progress.setVisible(busy)
+        self.cancel_button.setText('Cancel review' if self.review_open else 'Cancel batch')
+        self.default_language.setEnabled(not busy); self.manual_button.setEnabled(not busy and bool(self.active and self.active.result))
+        self.input_button.setEnabled(not busy); self.review_now_button.setEnabled(not busy); self.close_review_button.setEnabled(not busy)
         for r in range(self.files.rowCount()): self.files.cellWidget(r, 2).setEnabled(not busy)
         self.edit_box.setEnabled(not busy)
         self.navigation_box.setEnabled(not busy)
@@ -203,8 +243,8 @@ class Window(QWidget):
         if self.busy(): return
         if any(i.result and (i.saved_hash != i.result['sha256'] or self.review_changed(i)) for i in self.queue.items):
             if QMessageBox.question(self, 'Clear unsaved copies?', 'Clearing removes unsaved prepared copies from this session. Originals stay unchanged. Clear All?') != QMessageBox.Yes: return
-        self.queue.items.clear(); self.active = None; self.review_drafts.clear(); self.loaded_review = None; self.session.cleanup()
-        self.session = tempfile.TemporaryDirectory(prefix='PDF-Accessibility-Prep-'); self.refresh(); self.review_box.hide()
+        self.queue.items.clear(); self.active = None; self.review_drafts.clear(); self.loaded_review = None; self.review_open = False; self.attention_box.hide(); self.session.cleanup()
+        self.session = tempfile.TemporaryDirectory(prefix='PDF-Accessibility-Prep-'); self.refresh(); self.leave_review()
     def remove(self, item_id):
         if self.busy(): return
         item = next(i for i in self.queue.items if i.id == item_id)
@@ -212,6 +252,7 @@ class Window(QWidget):
             if QMessageBox.question(self, 'Remove unsaved copy?', 'Remove this unsaved prepared copy from the queue?') != QMessageBox.Yes: return
         self.review_drafts.pop(item.id, None)
         if self.active == item: self.active = None; self.loaded_review = None
+        self.attention_box.hide()
         self.queue.items.remove(item); shutil.rmtree(Path(self.session.name) / item.id, ignore_errors=True)
         self.refresh(); self.selection()
     def remove_selected(self):
@@ -219,10 +260,11 @@ class Window(QWidget):
         if r >= 0: self.remove(self.queue.items[r].id)
     def refresh(self):
         selected = self.active.id if self.active else None
-        self.files.blockSignals(True); self.files.setRowCount(len(self.queue.items))
+        count = len(self.queue.items); self.queue_label.setText(f'{count} PDF' + ('s' if count != 1 else '') + (' in this batch' if count else ' added yet'))
+        self.files.blockSignals(True); self.files.setRowCount(count)
         for r, item in enumerate(self.queue.items):
             name = QTableWidgetItem(Path(item.source).name); name.setToolTip(item.source)
-            state = item.status + (' · saved' if item.result and item.saved_hash == item.result['sha256'] else '')
+            state = {'Review needed — draft':'Prepared · draft', 'Automatic checks passed':'Prepared · checks passed', 'Checks passed and review recorded':'Prepared · reviewed', 'Failed':'Could not prepare'}.get(item.status, item.status) + (' · saved' if item.result and item.saved_hash == item.result['sha256'] else '')
             self.files.setItem(r, 0, name); self.files.setItem(r, 1, QTableWidgetItem(state))
             b = self.files.cellWidget(r, 2)
             if b is None or b.property('itemId') != item.id:
@@ -235,17 +277,72 @@ class Window(QWidget):
         self.files.blockSignals(False)
         if not self.busy():
             self.prepare_button.setEnabled(any(i.status in ('Queued', 'Cancelled', 'Retry') for i in self.queue.items))
-            self.save_button.setEnabled(any(i.result and (i.saved_hash != i.result['sha256'] or self.review_changed(i)) for i in self.queue.items))
+            available = sum(bool(i.result and (i.saved_hash != i.result['sha256'] or self.review_changed(i))) for i in self.queue.items)
+            self.save_button.setEnabled(bool(available))
+            self.save_button.setText(f'3. Save {available} prepared PDF' + ('s…' if available != 1 else '…') if available else '3. Save prepared PDFs…')
+            self.save_button.setAccessibleName(self.save_button.text().replace('3. ', '') + ' and accessibility reports')
     def prepare(self):
+        if self.busy(): return
+        self.leave_review(); self.attention_box.hide()
+        default = ['en', 'es', 'fr', 'de'][self.default_language.currentIndex()]
+        self.batch_ids = {i.id for i in self.queue.items if i.status in ('Queued', 'Retry', 'Cancelled')}
+        for item in self.queue.items:
+            if item.status in ('Queued', 'Retry', 'Cancelled'): item.options['default_language'] = default
         self.cancel_event.clear()
         self.launch(lambda emit: run_batch(self.queue.items, self.session.name, self.cancel_event, lambda *x: emit(x)), self.batch_done)
     def cancel(self):
-        self.cancel_event.set(); self.status.setText('Cancelling the current document. Completed copies remain available to Save All.')
+        self.cancel_event.set(); self.status.setText('Cancelling the current document. Completed copies remain available to Save prepared PDFs.')
     def batch_done(self, _):
-        ready = sum(i.result is not None for i in self.queue.items)
+        prepared = sum(i.result is not None for i in self.queue.items)
+        drafts = sum(needs_attention(i.result) for i in self.queue.items)
         failed = sum(i.status == 'Failed' for i in self.queue.items)
-        self.status.setText(f'Batch stopped. {ready} prepared copies available; {failed} failures. Select flagged files to review, then Save All.' if self.cancel_event.is_set() else f'Batch finished. {ready} prepared copies available; {failed} failures. Select flagged files to review, then Save All.')
+        self.status.setText(('Batch cancelled. ' if self.cancel_event.is_set() else 'Preparation finished. ') +
+            f'{prepared} prepared • {drafts} draft(s) • {failed} could not be prepared. Choose Save prepared PDFs to save available copies.')
+        flagged = [i for i in self.queue.items if i.id in getattr(self, 'batch_ids', {v.id for v in self.queue.items}) and (needs_attention(i.result) or i.status in ('Failed', 'Password needed', 'Signature consent needed'))]
+        if flagged:
+            summaries = []
+            for item in flagged:
+                why = reasons(item.result) if item.result else [explanation(item).split('\n')[0]]
+                for reason in why:
+                    if reason not in summaries: summaries.append(reason)
+            summary = '\n'.join('• ' + reason for reason in summaries[:3])
+            if len(summaries) > 3: summary += '\n• Select a file below to see its other details.'
+            self.attention_text.setText(f'{len(flagged)} file(s) need attention. ' +
+                'The other files have continued normally.\n' + summary +
+                '\n\nWould you like to review these items now? You can also save the available results as drafts.')
+            self.attention_box.show()
         self.selection()
+
+    def dismiss_attention(self):
+        self.attention_box.hide()
+        self.status.setText('Manual review skipped. Choose Save prepared PDFs to keep the prepared PDFs and their reports. Unresolved copies remain drafts.')
+
+    def set_review_view(self):
+        self.main_tools.setVisible(not self.review_open); self.instructions.setVisible(not self.review_open)
+        self.queue_label.setVisible(not self.review_open); self.files.setVisible(not self.review_open)
+        self.heading.setText('Review this PDF' if self.review_open else 'Prepare your PDFs')
+
+    def leave_review(self):
+        self.remember_review(); self.review_open = False; self.loaded_review = None
+        self.review_box.hide(); self.file_summary.show(); self.manual_button.show(); self.set_review_view()
+        self.selection()
+
+    def open_manual_review(self, checked=False):
+        if self.busy() or not self.active or not self.active.result: return
+        self.review_all = True; self.review_open = True; self.attention_box.hide(); self.selection()
+
+    def open_input(self, checked=False):
+        if self.busy() or not self.active: return
+        self.review_open = True; self.attention_box.hide(); self.selection()
+
+    def review_flagged(self):
+        if self.busy(): return
+        self.attention_box.hide(); self.review_open = True; self.review_all = False
+        for row, item in enumerate(self.queue.items):
+            if needs_attention(item.result) or item.status in ('Password needed', 'Signature consent needed', 'Failed'):
+                self.files.selectRow(row); self.selection(); return
+        self.leave_review()
+
     def on_event(self, event):
         kind = event[0]
         if kind in ('start', 'progress', 'done'):
@@ -256,12 +353,22 @@ class Window(QWidget):
         elif kind == 'save': self.status.setText(f'Saving {event[1]} of {event[2]}')
         elif kind == 'review': self.status.setText(str(event[1]))
     def selection(self):
+        self.set_review_view()
         r = self.files.currentRow()
-        if r < 0 or r >= len(self.queue.items): self.review_box.hide(); self.active = None; return
+        if r < 0 or r >= len(self.queue.items):
+            self.remember_review(); self.review_box.hide(); self.active = None; self.loaded_review = None; self.review_open = False; self.set_review_view()
+            self.manual_button.setEnabled(False); self.input_button.hide(); self.file_summary.setText('Select a PDF to see its result.'); return
         self.remember_review()
         self.active = item = self.queue.items[r]
+        self.file_summary.setText(Path(item.source).name + '\n' + explanation(item))
+        self.manual_button.setEnabled(bool(item.result) and not self.busy())
+        self.input_button.setVisible(item.status in ('Password needed', 'Signature consent needed', 'Failed') and not self.review_open)
+        self.file_summary.setVisible(not self.review_open); self.manual_button.setVisible(not self.review_open)
+        if not self.review_open:
+            self.review_box.hide(); self.loaded_review = None; return
+        self.review_box.setTitle(('Manual review — ' if item.result else 'Help with this PDF — ') + Path(item.source).name)
         self.review_box.setVisible(bool(item.result or item.error))
-        self.detail.setText(Path(item.source).name + '\n' + (item.error or item.status))
+        self.detail.setText(explanation(item))
         need_password = item.status == 'Password needed'; need_signature = item.status == 'Signature consent needed'
         self.password.setVisible(need_password); self.password.clear()
         self.signature.setVisible(need_signature); self.signature.setChecked(False)
@@ -269,8 +376,9 @@ class Window(QWidget):
         self.edit_box.setVisible(item.result is not None)
         self.navigation_box.setVisible(item.result is not None)
         if not item.result: return
+        self.next_file_button.setVisible(sum(bool(i.result) for i in self.queue.items) > 1)
         result = item.result
-        validation_message = {'passed': 'Automated PDF checks passed. Complete the requested human checks.', 'failed': 'Some automated accessibility checks failed. The saved report identifies remaining issues.', 'not performed': 'Automated validation could not be completed. This copy remains a draft.'}.get(result['validator']['status'], 'Checks incomplete.')
+        validation_message = 'Optional review. Automatic checks passed; no manual review is required.' if not needs_attention(result) else 'Review only what needs attention. You can leave anything for later and save a draft.'
         self.detail.setText(Path(item.source).name + '\n' + validation_message)
         self.main_split.setSizes([100, 600])
         self.title_field.setText(result['title']); self.language.setText(result['language'])
@@ -279,6 +387,7 @@ class Window(QWidget):
         self.questions.blockSignals(True); self.questions.clear()
         grouped = []
         for original in result['issues']:
+            if not self.review_all and (not original.get('required', True) or original['reviewed']): continue
             issue = copy.deepcopy(original); issue['ids'] = [issue['id']]
             if issue['kind'] in ('graphics', 'figures', 'nested_drawing'):
                 existing = next((v for v in grouped if v['kind'] == 'pictures' and v['page'] == issue['page']), None)
@@ -286,6 +395,8 @@ class Window(QWidget):
                 issue['kind'] = 'pictures'
                 issue['message'] = 'Describe the pictures or drawings on this page. Explain what each shows and what someone who cannot see it needs to know. Include all important labels, dimensions and units. Select each picture below to add its description.'
             grouped.append(issue)
+        if result['validator']['status'] != 'passed' or not grouped:
+            grouped.append({'id':'validation-summary', 'ids':[], 'kind':'validation_summary', 'page':None, 'reviewable':False, 'reviewed':False, 'message':explanation(item)})
         for issue in grouped:
             self.questions.addItem(('Page ' + str(issue['page']) if issue['page'] else 'Document') + ' — ' + issue['kind'].replace('_', ' '), issue)
         self.questions.blockSignals(False)
@@ -293,7 +404,7 @@ class Window(QWidget):
         self.load_elements(draft['elements'] if draft else result['elements'])
         if draft:
             self.title_field.setText(draft['title']); self.language.setText(draft['language']); self.reviewed = set(draft['reviewed']); self.tables = draft['tables']; self.lists = draft['lists']
-            self.questions.setCurrentIndex(draft['step'])
+            self.questions.setCurrentIndex(next((n for n in range(self.questions.count()) if self.questions.itemData(n)['id'] == draft.get('question_id')), min(max(draft['step'], 0), self.questions.count() - 1)))
         self.loaded_review = item.id
         self.language_choice.blockSignals(True); self.language_choice.setCurrentIndex({'en':0,'en-US':0,'en-GB':0,'es':1,'fr':2,'de':3}.get(self.language.text(),4)); self.language_choice.blockSignals(False)
         self.language.setVisible(self.language_choice.currentIndex() == 4); self.metadata_box.layout().labelForField(self.language).setVisible(self.language_choice.currentIndex() == 4)
@@ -404,8 +515,8 @@ class Window(QWidget):
         if self.questions.currentIndex() < self.questions.count() - 1: self.review_step(1)
         else: self.status.setText('This item will remain in the report. Choose Finish review to keep your other answers.')
     def remember_review(self):
-        if self.active and self.active.result and self.loaded_review == self.active.id:
-            self.review_drafts[self.active.id] = {'title': self.title_field.text(), 'language': self.language.text(), 'elements': self.current_elements(), 'reviewed': list(self.reviewed), 'tables': copy.deepcopy(self.tables), 'lists': copy.deepcopy(self.lists), 'step': self.questions.currentIndex()}
+        if self.review_open and self.active and self.active.result and self.loaded_review == self.active.id:
+            self.review_drafts[self.active.id] = {'title': self.title_field.text(), 'language': self.language.text(), 'elements': self.current_elements(), 'reviewed': list(self.reviewed), 'tables': copy.deepcopy(self.tables), 'lists': copy.deepcopy(self.lists), 'step': self.questions.currentIndex(), 'question_id': (self.questions.currentData() or {}).get('id')}
     def review_changed(self, item):
         self.remember_review()
         draft = self.review_drafts.get(item.id)
@@ -421,9 +532,9 @@ class Window(QWidget):
         start = self.files.currentRow()
         for offset in range(1, len(self.queue.items)):
             row = (start + offset) % len(self.queue.items)
-            if self.queue.items[row].result:
+            if self.queue.items[row].result and (self.review_all or needs_attention(self.queue.items[row].result)):
                 self.files.selectRow(row); return
-        self.status.setText('There are no other prepared PDFs. Finish this review, then choose Save All.')
+        self.status.setText('There are no other prepared PDFs. Finish this review, then choose Save prepared PDFs.')
     def move(self, direction):
         r = self.elements.currentRow(); target = r + direction
         if r < 0 or target < 0 or target >= self.elements.rowCount(): return
@@ -462,14 +573,16 @@ class Window(QWidget):
         def done(value):
             kind, result = value
             if kind == 'result':
-                item.result = result; item.status = result['status']; self.review_drafts.pop(item.id, None); self.loaded_review = None
-                self.status.setText('Review saved. Choose Review next PDF, or Save All when you are done. Items left for later remain in the report.')
+                item.result = result; item.status = result['status']; item.saved_hash = ''; self.review_drafts.pop(item.id, None); self.loaded_review = None
+                self.status.setText('Review saved. Choose Review next PDF, or Save prepared PDFs when you are done. Items left for later remain in the report.')
             else: self.status.setText('Review cancelled; previous copy retained.' if kind == 'cancelled' else result.get('message', 'Review failed; previous copy retained.'))
+            if self.active != item:
+                self.refresh(); return
             self.selection()
             if kind == 'result':
                 self.questions.setCurrentIndex(self.questions.count() - 1)
                 self.step_label.setText('Your answers have been saved')
-                self.question.setText('Choose Review next PDF to continue, or Save All when you are done. Anything left for later stays in the report. Use Back if you want to change an answer.')
+                self.question.setText('Choose Review next PDF to continue, or Back to files to save your prepared PDFs. Anything left for later stays in the report. Use Back if you want to change an answer.')
                 self.check.hide(); self.apply_button.hide(); self.picture_panel.hide(); self.metadata_box.hide()
                 self.advanced_toggle.setChecked(False)
                 self.review_scroll.verticalScrollBar().setValue(0)
@@ -481,19 +594,21 @@ class Window(QWidget):
             if not self.signature.isChecked(): return
             self.active.options['signature_consent'] = True
         self.active.status = 'Retry'; self.active.error = ''; self.refresh()
-        self.status.setText('Ready to retry. Prepare PDFs will process all queued and retry files.')
+        self.prepare()
     def save(self):
         self.remember_review()
         for row, item in enumerate(self.queue.items):
             if self.review_changed(item):
-                self.files.selectRow(row)
+                self.review_open = True; self.review_all = True
+                self.files.selectRow(row); self.selection()
                 self.questions.setCurrentIndex(self.questions.count() - 1)
                 self.question_changed()
-                self.status.setText('One review has answers to keep. Choose Finish review for this PDF, then Save All.')
+                self.status.setText('One review has answers to keep. Choose Finish review for this PDF, then Save prepared PDFs.')
                 self.review_scroll.verticalScrollBar().setValue(0)
                 return
         folder = QFileDialog.getExistingDirectory(self, 'Save all prepared PDFs and reports', self.output_folder)
         if not folder: return
+        self.attention_box.hide()
         self.output_folder = folder
         def done(value):
             saved, failed = value
@@ -506,9 +621,9 @@ class Window(QWidget):
         if self.output_folder: QDesktopServices.openUrl(QUrl.fromLocalFile(self.output_folder))
     def help(self):
         QMessageBox.information(self, 'Using PDF Accessibility Prep',
-            'Add several PDFs at once, or drop them into the window. Prepare PDFs processes each separately. Select a flagged file to review it, then Save All chooses one output folder.\n\n'
-            'Drafts are allowed. A missing check or unresolved issue never means a pass. English OCR is included in a complete portable build. Complex forms, graphics, equations, and layouts may require a specialist.\n\n'
-            'Brightspace: open course Content, choose a module, then Upload/Create → Upload Files, or Add Existing / browse. Upload the saved PDF and test the published view and download with a keyboard and screen reader. Menus vary by institution. Brightspace upload and the HTML checker do not repair or validate an attached PDF.\n\n'
+            'Add several PDFs at once, or drop them into the window. Prepare PDFs processes each separately. Save prepared PDFs chooses one output folder. If an automatic check fails, read the explanation and choose Review now or Not now. Selecting a file never opens manual review by itself.\n\n'
+            'Manual review is optional unless a specific problem needs human input. General checklists do not block saving. Drafts are allowed; a failed or missing automated check is never changed into a pass. English OCR is included in a complete portable build. Complex forms, graphics, equations, and layouts may require a specialist.\n\n'
+            'Brightspace: open course Content, choose a module, then Upload/Create Upload Files, or Add Existing / browse. Upload the saved PDF and test the published view and download with a keyboard and screen reader. Menus vary by institution. Brightspace upload and the HTML checker do not repair or validate an attached PDF.\n\n'
             'No account, document upload, telemetry, or network access is used by processing. The full source and license notices are included in the source package.')
     def closeEvent(self, event):
         if self.busy():
@@ -522,5 +637,6 @@ class Window(QWidget):
 def main():
     app = QApplication([])
     app.setApplicationName('PDF Accessibility Prep')
+    configure_application(app)
     window = Window(); window.show()
     return app.exec()

@@ -18,7 +18,7 @@ def report(result):
              '<style>body{font:1rem/1.6 system-ui,sans-serif;max-width:70em;margin:2em auto;padding:0 1em}code{overflow-wrap:anywhere}table{border-collapse:collapse}td,th{padding:.5em;border:1px solid}h1,h2{line-height:1.25}</style>',
              '<main><h1>PDF accessibility preparation report</h1>',
              f'<p><strong>{e(result["status"])}</strong></p>',
-             '<p>This report is not a legal compliance certificate or publication approval. Unresolved checks mean this copy is a draft.</p>',
+             '<p>This report is not a legal compliance certificate or publication approval. Unresolved required checks mean this copy is a draft. Optional suggestions do not require manual review.</p>',
              f'<p>Source: {e(result["source_name"])}<br>Title: {e(result["title"])}<br>Language: {e(result["language"])}<br>Pages: {result["page_count"]}</p>',
              f'<p>Prepared PDF SHA-256: <code>{e(result["sha256"])}</code><br>Original SHA-256: <code>{e(result["source_sha256"])}</code></p>',
              '<h2>Changes performed</h2><ul>']
@@ -29,7 +29,7 @@ def report(result):
     lines += [f'<li>{e(f.get("specification"))} {e(f.get("clause"))}: {e(f.get("description"))}<br>{e(f.get("contexts"))}</li>' for f in v.get('failures', [])]
     lines += ['</ul><h2>Review and remaining issues</h2><ul>']
     for i in result['issues']:
-        state = 'Human review recorded' if i['reviewed'] else ('Human review required' if i['reviewable'] else 'Unsupported / unresolved')
+        state = 'Human review recorded' if i['reviewed'] else ('Optional check' if not i.get('required', True) else ('Human review required' if i['reviewable'] else 'Unsupported / unresolved'))
         lines.append(f'<li><strong>{state}</strong> — {"Page " + str(i["page"]) if i["page"] else "Document"}: {e(i["message"])}</li>')
     lines += ['</ul><h2>Page preservation</h2><p>Every page was compared at its original position.</p><ol>']
     lines += [f'<li>Page {p["page"]}: {p["width"]} × {p["height"]} points; rotation {p["rotation"]}; {e(p["appearance"])}; {p.get("vector_paths", 0)} vector paths checked for unchanged geometry and line styles; page boxes and drawing scale checked.</li>' for p in result['pages']]

@@ -13,7 +13,7 @@ def test_guided_review_groups_pictures_and_keeps_answers(tmp_path):
     result=prepare(source,tmp_path/'work')
     window=Window();window.add([source])
     item=window.queue.items[0];item.result=result;item.status=result['status']
-    window.refresh();window.files.selectRow(0);window.selection();window.show();app.processEvents()
+    window.refresh();window.files.selectRow(0);window.selection();window.open_manual_review();window.show();app.processEvents()
     assert not window.questions.isVisible()
     assert not window.advanced_box.isVisible()
     assert 'Step 1 of' in window.step_label.text()
@@ -44,7 +44,7 @@ def test_review_navigation_does_not_confirm_unchecked_items(tmp_path):
     source=drawing_pdf(tmp_path/'two.pdf',nested=True)
     result=prepare(source,tmp_path/'work')
     window=Window();window.add([source]);item=window.queue.items[0];item.result=result
-    window.refresh();window.files.selectRow(0);window.selection()
+    window.refresh();window.files.selectRow(0);window.selection();window.open_manual_review()
     for _ in range(window.questions.count()):window.review_step(1)
     assert not window.reviewed
     assert not window.next_button.isEnabled()
@@ -60,7 +60,7 @@ def test_switching_pdfs_keeps_answers_and_finish_writes_them(tmp_path):
     result=prepare(source,tmp_path/'work')
     window=Window();window.add([source,other])
     for item in window.queue.items:item.result=copy.deepcopy(result);item.status=result['status']
-    window.refresh();window.files.selectRow(0);window.selection()
+    window.refresh();window.files.selectRow(0);window.selection();window.open_manual_review()
     window.title_field.setText('Class drawing worksheet');window.check.setChecked(True)
     window.next_review_file();assert window.active==window.queue.items[1]
     window.next_review_file();assert window.title_field.text()=='Class drawing worksheet'

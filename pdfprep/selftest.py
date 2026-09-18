@@ -12,6 +12,7 @@ from .batch import run_batch
 from .engine import review, prepare
 from .saving import save_all
 from .validation import validate, resources
+from .workflow import needs_attention
 
 
 def main():
@@ -32,6 +33,8 @@ def main():
             outcomes = [{'fixture': Path(i.source).name, 'status': i.status, 'error': i.error} for i in queue.items]
             first, scanned, _, five = queue.items
             checks['valid_existing_preserved'] = bool(first.result and first.result['validator']['status'] == 'passed')
+            checks['automatic_pass_without_forced_review'] = bool(first.result and first.result['status'] == 'Automatic checks passed' and not needs_attention(first.result))
+            checks['uncertain_scan_stays_draft'] = bool(scanned.result and needs_attention(scanned.result) and not scanned.result['publication_ready'])
             if first.result:
                 reviewed = review(first.result, {'reviewed': [i['id'] for i in first.result['issues'] if i['reviewable']]})
                 checks['review_revalidates_actual_final'] = reviewed['validator']['status'] == 'passed' and reviewed['status'] == 'Checks passed and review recorded'
@@ -44,6 +47,24 @@ def main():
             nested = prepare(drawing_pdf(root / 'nested-cad.pdf', nested=True), root / 'nested-work')
             checks['nested_cad_preserved_and_tagged'] = len([e for e in nested['elements'] if e['kind'] == 'figure']) == 2 and not any(i['kind'] == 'structure' for i in nested['issues']) and all(p['vector_geometry_and_styles_preserved'] for p in nested['pages'])
             checks['brightspace_documented_pdf_format'] = described['brightspace']['status'] == 'PDF format checks passed'
+            from PySide6.QtWidgets import QApplication
+            from .app import Window
+            app = QApplication.instance() or QApplication([])
+            window = Window()
+            from PySide6.QtGui import QRawFont
+            checks['bundled_interface_font'] = QRawFont.fromFont(app.font()).supportsCharacter(ord('A'))
+            window.add([accessible, scan])
+            for target, source_item in zip(window.queue.items, (first, scanned)):
+                target.result = source_item.result; target.status = source_item.status
+            window.refresh(); window.files.selectRow(0); window.show(); app.processEvents(); window.batch_done(None)
+            offered = window.attention_box.isVisible() and not window.review_box.isVisible()
+            window.dismiss_attention(); window.selection(); app.processEvents()
+            declined = not window.attention_box.isVisible() and not window.review_box.isVisible()
+            window.manual_button.click(); app.processEvents()
+            checks['manual_review_only_after_user_choice'] = offered and declined and window.review_box.isVisible()
+            window.loaded_review = None; window.review_drafts.clear()
+            for item in window.queue.items: item.saved_hash = item.result['sha256']
+            window.close()
             output = root / 'output'; output.mkdir()
             saved, failed = save_all(queue.items, output)
             checks['save_all_pdf_and_report'] = len(saved) == 3 and not failed and all(Path(p).exists() for _, paths in saved for p in paths)
