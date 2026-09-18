@@ -4,6 +4,10 @@
 
 **Prepare existing PDFs for screen-reader access and accessible delivery through Blackboard and Brightspace.**
 
+[![Download for Windows — version 0.2.0, portable, 64-bit](docs/assets/download-windows.svg)](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe)
+
+**No installation required.** Download the application and open it on Windows. [Release notes and source code](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest).
+
 PDF Accessibility Prep helps teachers, faculty, instructional designers, disability-services staff, and campus accessibility teams improve the PDFs their students use every day. Process a whole batch of syllabi, readings, worksheets, assignments, and student-support documents in one simple Windows application.
 
 Built to support **ADA Title II accessibility compliance work in schools and colleges**, with automatic preparation, independent PDF checks, and clear explanations when a document needs human attention.
@@ -90,7 +94,11 @@ Batch verification includes **1, 10, 50, and 100 PDFs**, duplicate filenames, da
 
 ## 💻 Getting the Windows application
 
-The portable application runs on Windows and bundles its normal PDF, OCR, and validation runtime components. This public repository currently provides the source, build instructions, and verification records; a prebuilt executable is not attached to a GitHub release here.
+[**Download PDF Accessibility Prep for Windows**](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe) — version 0.2.0, 64-bit, approximately 137 MB.
+
+Download the `.exe`, open it, and add your PDFs. No installer, Python setup, or account is required. The portable application bundles its normal PDF, OCR, and validation runtime components. The [release page](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest) includes the application source and SHA-256 checksums.
+
+This build is not digitally signed; Windows may show an unrecognized-publisher notice. School and college staff should follow their institution’s software approval process.
 
 <details>
 <summary><strong>For school and college IT teams: build the portable application</strong></summary>

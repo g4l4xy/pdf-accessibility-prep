@@ -28,4 +28,4 @@ Exact downloaded resource URLs and checksums are recorded in `dependencies.lock.
 
 A general upstream project link is not, by itself, a declaration that every corresponding-source obligation has been fulfilled. Distributors must provide the exact corresponding source and required build materials for their actual covered binaries through a method permitted by each applicable license. Preserve the Qt replacement/rebuilding rights and third-party notices. Retain the JRE legal directory and wheel-provided component notices. Review native transitive dependencies as well as Python wrappers.
 
-No prebuilt Windows executable accompanies this initial public source repository. The local executable test record is retained as development evidence. Public binary packaging needs its own matching dependency-source distribution review.
+The Windows 0.2.0 release provides the executable, matching application source archive, build materials, dependency source links above, license notices, and SHA-256 checksums together on the GitHub release page. The source archive includes pinned dependency versions and exact resource URLs in `dependencies.lock.json`.
