@@ -1,0 +1,10 @@
+{
+  "version": "0.3.1",
+  "sha256": "4dbe45fdd5266eb799636849e98f3fd4d80ed3950c5a1de855f391dd669f92bd",
+  "size_bytes": 154690898,
+  "local_full_tests": 126,
+  "final_local_ui_tests": 91,
+  "final_windows_ui_tests": 91,
+  "packaged_checks": 23,
+  "environment": "Windows 11 ARM64 in Parallels, x64 emulation"
+}

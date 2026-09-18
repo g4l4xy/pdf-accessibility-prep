@@ -66,19 +66,33 @@ def test_failed_file_and_validation_remain_failures(monkeypatch, code):
     message = explanation(item)
     assert message
     assert result['validator']['status'] == 'failed' and not result['issues'][0]['reviewed']
-    if code != 'en': assert i18n.tr('Fonts or characters need repair in the original document.') in message
+    if code != 'en': assert i18n.tr('A font still needs repair. Export a new PDF from the original file with fonts embedded, then add it here again. If you cannot, save the draft and report for your accessibility office.') in message
 
-def test_language_preference_does_not_modify_active_session(app, monkeypatch, tmp_path):
+def test_language_switch_applies_immediately_and_persists(app, monkeypatch):
     monkeypatch.delenv('PDFPREP_UI_LANGUAGE', raising=False)
-    QSettings.setDefaultFormat(QSettings.IniFormat)
-    QSettings.setPath(QSettings.IniFormat, QSettings.UserScope, str(tmp_path))
-    i18n.set_language('en'); w = Window()
-    monkeypatch.setattr(QMessageBox, 'information', lambda *a: None)
-    w.ui_language.setCurrentIndex(w.ui_language.findData('ar'))
-    assert i18n.current_language() == 'en'
+    i18n.set_language('en'); w = Window(); w.show()
+    session = w.session
+    w.ui_language.setCurrentIndex(w.ui_language.findData('ar')); app.processEvents()
+    assert i18n.current_language() == 'ar'
+    assert w.heading.text() == i18n.tr('Prepare your PDFs') and w.layoutDirection() == Qt.RightToLeft
+    assert w.session is session
     i18n._active = None
     assert i18n.current_language() == 'ar'
-    w.close(); i18n.set_language('en')
+    w.english_button.click(); app.processEvents()
+    assert w.heading.text() == 'Prepare your PDFs' and w.layoutDirection() == Qt.LeftToRight
+    assert i18n.settings().value('ui_language_v2') == 'en'
+    w.close()
+
+def test_fresh_download_ignores_system_and_legacy_arabic(monkeypatch):
+    import sys
+    monkeypatch.setattr(sys, 'frozen', True, raising=False)
+    monkeypatch.setenv('PDFPREP_UI_LANGUAGE', 'ar')
+    i18n.settings().setValue('ui_language', 'ar')
+    i18n._active = None
+    assert i18n.current_language() == 'en'
+    i18n.settings().setValue('ui_language_v2', 'invalid')
+    i18n._active = None
+    assert i18n.current_language() == 'en'
 
 @pytest.mark.parametrize('code,sample', [('ar','إمكانية الوصول'),('hi','सुलभता'),('zh','准备文件'),('ja','読み上げ確認')])
 def test_bundled_fonts_have_no_missing_glyphs(app, monkeypatch, code, sample):
@@ -113,3 +127,31 @@ def test_review_now_selects_first_file_without_prior_click(app, monkeypatch, rev
     assert item.result['validator']['status'] == 'failed'
     w.leave_review(); assert not w.review_box.isVisible()
     w.loaded_review = None; w.review_drafts.clear(); item.saved_hash = item.result['sha256']; w.close()
+
+
+@pytest.mark.parametrize('code', list(i18n.LANGUAGES))
+def test_live_switch_keeps_review_and_queue(app, monkeypatch, review_source, code):
+    import copy
+    monkeypatch.delenv('PDFPREP_UI_LANGUAGE', raising=False)
+    i18n.set_language('en')
+    source, result = review_source
+    w = Window(); w.show(); w.add([source])
+    item = w.queue.items[0]; item.result = copy.deepcopy(result); item.status = result['status']
+    w.refresh(); w.files.setCurrentCell(0, 0); w.open_manual_review()
+    w.title_field.setText('My unsaved title — 私の文書')
+    w.language.setText('es-MX')
+    w.reviewed.add('metadata:0')
+    w.default_language.setCurrentIndex(w.default_language.findData('fr'))
+    w.output_folder = 'saved-output'; w.preview_zoom.setValue(150)
+    session = w.session; original_hash = item.result['sha256']
+    w.ui_language.setCurrentIndex(w.ui_language.findData(code)); app.processEvents()
+    assert i18n.current_language() == code
+    assert w.queue.items[0] is item and w.session is session
+    assert w.active is item and w.review_open and w.review_box.isVisible()
+    assert w.title_field.text() == 'My unsaved title — 私の文書'
+    assert w.language.text() == 'es-MX' and 'metadata:0' in w.reviewed
+    assert w.default_language.currentData() == 'fr' and w.preview_zoom.value() == 150
+    assert item.result['sha256'] == original_hash and w.output_folder == 'saved-output'
+    w.english_button.click(); app.processEvents()
+    assert w.heading.text() == 'Review this PDF' and w.layoutDirection() == Qt.LeftToRight
+    w.loaded_review = None; w.review_drafts.clear(); item.saved_hash = original_hash; w.close()

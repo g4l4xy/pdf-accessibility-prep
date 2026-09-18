@@ -1,5 +1,16 @@
 # Changes
 
+## 0.3.1
+
+- Start in English and ignore the legacy 0.3.0 language preference. Apply language changes immediately without losing queued PDFs or review answers; add an English recovery button.
+- Automatically add PDF/UA-1 identification before independent validation and refresh it after edits. Unresolved checks remain drafts.
+- Repair supported missing embedded-font mappings and layer-configuration names while preserving page artwork.
+- Remove technical failures from question-by-question review. When there are no questions, offer a clear Save PDFs and help reports action.
+- Show larger page previews beside drawing descriptions and numbered reading sequences, with simple up/down buttons.
+- Prefer the windowless Java runtime for validation and keep no-console process flags.
+- Verify 126 local full-suite tests, 91 final targeted tests locally and on Windows, and 23 packaged checks, with separate normal-launch and visible-console checks.
+
+
 ## 0.3.0
 
 - Add 12 offline interface languages, a saved language preference, and first-launch system-language selection with English fallback.

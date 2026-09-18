@@ -7,7 +7,7 @@ import os
 import sys
 import tempfile
 import threading
-from .fixtures import accessible_pdf, scan_pdf, text_pdf, drawing_pdf
+from .fixtures import accessible_pdf, scan_pdf, text_pdf, drawing_pdf, export_defaults_pdf
 from .model import Queue, sha256
 from .batch import run_batch
 from .engine import review, prepare
@@ -41,6 +41,12 @@ def main():
                 checks['review_revalidates_actual_final'] = reviewed['validator']['status'] == 'passed' and reviewed['status'] == 'Checks passed and review recorded'
             checks['bundled_english_ocr'] = bool(scanned.result and any('invisible English OCR' in f for f in scanned.result['fixes']))
             checks['page_preservation'] = bool(five.result and five.result['page_count'] == 5 and all(p['source_render_sha256'] == p['prepared_render_sha256'] for p in five.result['pages']))
+            repaired = prepare(export_defaults_pdf(root / 'export-defaults.pdf'), root / 'export-defaults-work')
+            checks['automatic_font_and_layer_repairs'] = any('identity glyph mapping' in f for f in repaired['fixes']) and any('layer configurations' in f for f in repaired['fixes']) and not any(f['clause'] in ('7.21.3.2', '7.10') for f in repaired['validator']['failures']) and all(p['source_render_sha256'] == p['prepared_render_sha256'] for p in repaired['pages'])
+            import pikepdf
+            with pikepdf.open(repaired['output']) as identified:
+                with identified.open_metadata() as meta:
+                    checks['automatic_pdfua_identification_and_real_validation'] = str(meta['pdfuaid:part']) == '1' and not any(f['clause'] == '5' for f in repaired['validator']['failures']) and repaired['validator']['status'] == 'failed' and not repaired['publication_ready']
             drawing = prepare(drawing_pdf(root / 'isometric.pdf'), root / 'drawing-work')
             figures = [e for e in drawing['elements'] if e['kind'] == 'figure']
             described = review(drawing, {'elements': [dict(e, alt='Synthetic isometric block: dimensions and features require instructor verification.') for e in figures]})
@@ -84,6 +90,30 @@ def main():
             finally:
                 if old_language is None: os.environ.pop('PDFPREP_UI_LANGUAGE', None)
                 else: os.environ['PDFPREP_UI_LANGUAGE'] = old_language
+            from . import i18n
+            old_override = os.environ.pop('PDFPREP_UI_LANGUAGE', None)
+            old_settings = os.environ.get('PDFPREP_SETTINGS_FILE')
+            old_active = i18n._active
+            try:
+                os.environ['PDFPREP_SETTINGS_FILE'] = str(root / 'selftest-language.ini')
+                i18n.settings().setValue('ui_language', 'ar'); i18n._active = None
+                checks['fresh_download_defaults_to_english'] = i18n.current_language() == 'en'
+                live = Window(); live.show(); live.add([accessible])
+                target = live.queue.items[0]; target.result = first.result; target.status = first.status
+                live.refresh(); live.files.setCurrentCell(0, 0); live.open_manual_review()
+                live.title_field.setText('Unsaved review title'); session = live.session
+                live.ui_language.setCurrentIndex(live.ui_language.findData('ar')); app.processEvents()
+                arabic = i18n.current_language() == 'ar' and live.heading.text() != 'Review this PDF'
+                retained = live.title_field.text() == 'Unsaved review title' and live.session is session and live.active is target
+                live.english_button.click(); app.processEvents()
+                checks['live_switch_and_english_recovery'] = arabic and live.heading.text() == 'Review this PDF' and i18n.current_language() == 'en'
+                checks['language_switch_keeps_unsaved_review'] = retained and live.title_field.text() == 'Unsaved review title'
+                live.loaded_review = None; live.review_drafts.clear(); target.saved_hash = target.result['sha256']; live.close()
+            finally:
+                i18n._active = old_active
+                if old_override is not None: os.environ['PDFPREP_UI_LANGUAGE'] = old_override
+                if old_settings is None: os.environ.pop('PDFPREP_SETTINGS_FILE', None)
+                else: os.environ['PDFPREP_SETTINGS_FILE'] = old_settings
             output = root / 'output' ; output.mkdir()
             saved, failed = save_all(queue.items, output)
             checks['save_all_pdf_and_report'] = len(saved) == 3 and not failed and all(Path(p).exists() for _, paths in saved for p in paths)

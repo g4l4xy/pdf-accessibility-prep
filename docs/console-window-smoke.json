@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "exit_code": 0,
+  "timeout": false,
+  "new_visible_console_windows": [],
+  "observation_interval_ms": 20,
+  "elapsed_seconds": 51.29,
+  "executable_sha256": "4dbe45fdd5266eb799636849e98f3fd4d80ed3950c5a1de855f391dd669f92bd",
+  "scope": "Visible console and Windows Terminal windows during frozen self-test on interactive Windows desktop; pre-existing windows excluded."
+}

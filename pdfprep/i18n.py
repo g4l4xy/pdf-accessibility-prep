@@ -4,8 +4,9 @@
 from functools import lru_cache
 import json
 import os
+import sys
 from pathlib import Path
-from PySide6.QtCore import QLocale, QSettings
+from PySide6.QtCore import QSettings
 
 LANGUAGES = {'en':'English', 'es':'Español', 'fr':'Français', 'de':'Deutsch',
              'pt':'Português', 'it':'Italiano', 'nl':'Nederlands', 'pl':'Polski',
@@ -20,22 +21,30 @@ def catalog(code):
     except (OSError, ValueError):
         return {}
 
+def settings():
+    # Tests must never change the user's real preference store.
+    test_file = os.environ.get('PDFPREP_SETTINGS_FILE')
+    if test_file and (not getattr(sys, 'frozen', False) or '--self-test' in sys.argv):
+        return QSettings(test_file, QSettings.IniFormat)
+    return QSettings('Eathan Huber', 'PDF Accessibility Prep')
+
 def current_language():
     global _active
-    override = os.environ.get('PDFPREP_UI_LANGUAGE')
-    if override is not None: return override if override in LANGUAGES else 'en'
+    # Ignore developer/test overrides in ordinary downloaded application launches.
+    if not getattr(sys, 'frozen', False) or '--self-test' in sys.argv:
+        override = os.environ.get('PDFPREP_UI_LANGUAGE')
+        if override is not None: return override if override in LANGUAGES else 'en'
     if _active is None:
-        saved = QSettings('Eathan Huber', 'PDF Accessibility Prep').value('ui_language', '')
-        code = saved or QLocale.system().name().split('_')[0]
-        _active = code if code in LANGUAGES else 'en'
+        # Do not inherit system locale or potentially contaminated 0.3.0 settings.
+        saved = settings().value('ui_language_v2', 'en')
+        _active = saved if saved in LANGUAGES else 'en'
     return _active
 
 def set_language(code, *, persist=False, activate=True):
     global _active
     if code not in LANGUAGES: code = 'en'
     if persist:
-        settings = QSettings('Eathan Huber', 'PDF Accessibility Prep')
-        settings.setValue('ui_language', code); settings.sync()
+        store = settings(); store.setValue('ui_language_v2', code); store.sync()
     if activate: _active = code
 
 def tr(source, **values):

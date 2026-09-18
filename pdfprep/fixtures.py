@@ -130,3 +130,20 @@ def drawing_pdf(path, nested=False, scanned=False):
             staged=path.with_suffix('.scale.pdf'); pdf.save(staged)
         staged.replace(path)
     return path
+
+
+def export_defaults_pdf(path):
+    """Synthetic source with omitted default glyph map and unnamed layer settings."""
+    path = Path(path)
+    original = path.with_suffix('.original.pdf')
+    drawing_pdf(original)
+    with q.open(original) as pdf:
+        for obj in pdf.objects:
+            if isinstance(obj, q.Dictionary) and str(obj.get('/Subtype', '')) == '/Type0':
+                for font in obj.get('/DescendantFonts', []):
+                    if '/CIDToGIDMap' in font: del font['/CIDToGIDMap']
+        layer = pdf.make_indirect(q.Dictionary(Type=q.Name.OCG, Name='Drawing'))
+        pdf.Root.OCProperties = q.Dictionary(OCGs=q.Array([layer]), D=q.Dictionary(Order=q.Array([layer]), OFF=q.Array()))
+        pdf.save(path)
+    original.unlink()
+    return path

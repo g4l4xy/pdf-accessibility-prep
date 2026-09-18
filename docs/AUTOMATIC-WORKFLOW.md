@@ -18,4 +18,21 @@ Missing picture descriptions, uncertain OCR, complex reading order, unsupported 
 
 ## What a pass means
 
-“Automatic checks passed” is a machine-check result, not a certification of WCAG compliance, the correctness of a drawing, or publication readiness. Failed or unavailable validation cannot be dismissed with a checkbox. The app does not add a PDF/UA conformance claim merely to suppress a validation failure. Drafts remain labeled in the queue and individual reports.
+“Automatic checks passed” is a machine-check result, not a certification of WCAG compliance, the correctness of a drawing, or publication readiness. Failed or unavailable validation cannot be dismissed with a checkbox. PDF/UA-1 identification is added automatically before independent validation; metadata alone cannot turn a failed or incomplete result into a pass. Drafts remain labeled in the queue and individual reports.
+
+
+## Version 0.3.1: fewer technical tasks for instructors
+
+The app now makes two supported export defaults explicit automatically: the identity glyph mapping for an embedded TrueType CID font using Identity encoding, and a missing name for a drawing-layer configuration. It does not substitute fonts, change an existing glyph map, or change layer visibility. Every prepared result still undergoes page, text, geometry, and rendered-appearance comparisons. The identity default is documented in [Adobe’s PDF Reference, version 1.5](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/pdfreference1.5_v6.pdf), in the CIDFont dictionary description.
+
+Drawing review asks what a student should learn and provides a description box beside a larger page preview. Reading-order review shows the actual numbered content items beside the page, with **Move selected item up/down** buttons; instructors no longer have to open the advanced tag table for basic reordering. Unfinished answers remain available when leaving review or changing interface language.
+
+Technical failures are not review questions. Review contains only questions a user can answer. When there are none, the app skips numbered steps, hides advanced editing and navigation controls, and offers **Save PDFs and help reports…** with a concrete next step. Missing Figure descriptions are no longer misreported as a separate generic structure error. PDF/UA-1 identification is added automatically during preparation and refreshed after edits. The final PDF is independently validated; unresolved issues remain drafts.
+
+Meaningful image descriptions and ambiguous reading order still require informed human input. The app does not invent geometry, dimensions, or learning objectives, and does not treat pressing Next as confirmation.
+
+![Numbered reading sequence beside the page preview](simple-review-en-reading.png)
+
+![No technical questions: save the PDF and help report](simple-no-technical-questions-windows.png)
+
+Windows Qt views with synthetic classroom documents.

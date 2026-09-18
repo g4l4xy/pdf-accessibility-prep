@@ -1,0 +1,56 @@
+{
+  "passed": true,
+  "checks": {
+    "independent_ua1_fixture": true,
+    "selection_deduplication": true,
+    "isolated_workers_and_failure_continuation": true,
+    "valid_existing_preserved": true,
+    "automatic_pass_without_forced_review": true,
+    "uncertain_scan_stays_draft": true,
+    "review_revalidates_actual_final": true,
+    "bundled_english_ocr": true,
+    "page_preservation": true,
+    "automatic_font_and_layer_repairs": true,
+    "automatic_pdfua_identification_and_real_validation": true,
+    "isometric_vector_preservation_and_description": true,
+    "nested_cad_preserved_and_tagged": true,
+    "brightspace_documented_pdf_format": true,
+    "bundled_interface_font": true,
+    "manual_review_only_after_user_choice": true,
+    "all_language_catalogs_bundled": true,
+    "translated_interfaces_keep_pdf_language_separate": true,
+    "translated_interface_glyphs": true,
+    "fresh_download_defaults_to_english": true,
+    "live_switch_and_english_recovery": true,
+    "language_switch_keeps_unsaved_review": true,
+    "save_all_pdf_and_report": true
+  },
+  "failure": null,
+  "fixture_outcomes": [
+    {
+      "fixture": "tagged.pdf",
+      "status": "Automatic checks passed",
+      "error": ""
+    },
+    {
+      "fixture": "scan.pdf",
+      "status": "Review needed \u2014 draft",
+      "error": ""
+    },
+    {
+      "fixture": "damaged.pdf",
+      "status": "Failed",
+      "error": "This PDF could not be processed safely. Try exporting it again from the source."
+    },
+    {
+      "fixture": "five.pdf",
+      "status": "Review needed \u2014 draft",
+      "error": ""
+    }
+  ],
+  "platform": "win32",
+  "frozen": true,
+  "network_disabled_by_test": false,
+  "executable_sha256": "4dbe45fdd5266eb799636849e98f3fd4d80ed3950c5a1de855f391dd669f92bd",
+  "note": "This self-test does not replace clean-Windows offline or screen-reader acceptance testing."
+}

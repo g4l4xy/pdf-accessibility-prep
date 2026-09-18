@@ -17,6 +17,9 @@ def resources():
 def command():
     root = resources()
     java = root / 'jre' / 'bin' / ('java.exe' if os.name == 'nt' else 'java')
+    # Use the windowless JVM when bundled; retain no-console flags for fallback.
+    if os.name == 'nt' and java.with_name('javaw.exe').exists():
+        java = java.with_name('javaw.exe')
     jars = list((root / 'verapdf' / 'bin').glob('*.jar'))
     if not java.exists() or not jars:
         return None

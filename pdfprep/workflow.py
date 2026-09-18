@@ -11,59 +11,50 @@ def needs_attention(result):
 
 
 def reasons(result):
-    if current_language() != 'en':
-        messages = list(dict.fromkeys(issue_text(i) for i in result['issues'] if i.get('required', True) and not i['reviewed']))
-        if result['validator']['status'] != 'passed':
-            messages.append(tr('The validation tool could not finish. See technical details.' if result['validator']['status'] == 'not performed' else 'The independent accessibility check did not pass. See the report.'))
-        if result.get('brightspace', {}).get('status', 'PDF format checks passed') != 'PDF format checks passed':
-            messages.append(tr('The independent accessibility check did not pass. See the report.'))
-        return list(dict.fromkeys(messages))
+    """Actionable prompts; technical validator rules belong in the report."""
     messages = []
+    kinds = {i['kind'] for i in result['issues'] if i.get('required', True) and not i['reviewed']}
     def add(message):
-        if message not in messages: messages.append(message)
-    labels = {
-        'figures': 'A picture or drawing needs a written description.',
-        'graphics': 'A drawing needs a description of its meaning, labels and dimensions.',
-        'nested_drawing': 'A drawing needs a description of its meaning, labels and dimensions.',
-        'reading': 'The page layout is too complex to safely decide the reading order or headings.',
-        'ocr': 'Text was recognized from a scan; a person needs to check the words and numbers.',
-        'ocr_existing': 'The scan already has a text layer. Its accuracy cannot be checked automatically.',
-        'ocr_empty': 'The scan did not provide readable text. A clearer original may be needed.',
-        'fonts': 'A font is missing from the PDF. Re-export it with embedded fonts; a checkbox cannot fix this.',
-        'unicode': 'Some characters cannot be read reliably. The source text or fonts need repair.',
-        'forms': 'Interactive form fields need specialist checking.',
-        'links': 'Links need their accessible text and keyboard behavior checked.',
-        'structure': 'Part of the PDF structure needs repair in the original document or a specialist editor.',
-        'ocr_missing': 'The local text-recognition files are missing. A complete app build is needed.',
-        'rotated_ocr': 'Rotated scanned text could not be added safely.',
-        'existing_scan': 'A tagged page has no readable text. It may need OCR or a description.',
-    }
+        value = tr(message)
+        if value not in messages: messages.append(value)
+    if kinds & {'figures', 'graphics', 'nested_drawing'}:
+        add('Describe the drawing: open review, look at the page, and explain what a student needs to understand.')
+    if 'reading' in kinds:
+        add('Check the reading sequence: review shows the numbered items and lets you move them up or down.')
+    if kinds & {'ocr', 'ocr_existing'}:
+        add('Check the scanned words and numbers against the page preview.')
+    other = kinds - {'figures', 'graphics', 'nested_drawing', 'reading', 'ocr', 'ocr_existing'}
     for issue in result['issues']:
-        if issue.get('required', True) and not issue['reviewed']:
-            kind = issue['kind']
-            # One explanation for related drawing checks, not three copies.
-            if kind in ('figures', 'graphics', 'nested_drawing'):
-                add('A picture or drawing needs a written description, including important labels and dimensions.')
-            else: add(labels.get(kind, issue['message']))
+        if issue['kind'] in other and issue.get('required', True) and not issue['reviewed']:
+            if issue.get('reviewable', False): add(issue_text(issue))
+    technical = technical_help(result)
+    if technical: messages.append(technical)
+    return messages
+
+
+def technical_help(result):
+    """Separate questions the teacher can answer from repairs outside this editor."""
     validator = result['validator']
     if validator['status'] == 'not performed':
-        add('The independent PDF check could not finish. ' + validator.get('reason', 'The validation tool did not return a usable result.'))
-    elif validator['status'] != 'passed':
-        failures = validator.get('failures', [])
-        descriptions = ' '.join(f.get('description', '') for f in failures).lower()
-        if 'pdfuaid' in descriptions or ('pdf/ua' in descriptions and ('identifier' in descriptions or 'identification' in descriptions)):
-            add('The PDF is missing or has an invalid PDF/UA identification entry. The app does not add a certification claim automatically.')
-        if 'font' in descriptions: add('The independent check found a font problem; it may need a new export from the original document.')
-        if any(word in descriptions for word in ('structure', 'marked', 'tagged', 'structelem', 'parenttree')):
-            add('The independent check found a tagging or document-structure problem.')
-        if 'alt' in descriptions and not any('description' in m for m in messages):
-            add('The independent check found missing or invalid alternative text.')
-        if not failures: add('The independent accessibility check did not pass. Its report did not provide individual rule details.')
-        elif not any(word in descriptions for word in ('pdfuaid', 'identifier', 'identification', 'font', 'structure', 'marked', 'tagged', 'structelem', 'parenttree', 'alt')):
-            add('The independent accessibility check found a problem: ' + failures[0].get('description', 'See the saved report for details.'))
+        return tr('The independent PDF check could not finish. Download the complete app and prepare the PDF again.') + ' ' + validator.get('reason', '')
+    failures = validator.get('failures', [])
+    # Missing alternative text is addressed by the picture question, not a second
+    # misleading "structure" warning. Identification is still a failed rule and
+    # is retained in the report and draft status; it is never checked away.
+    pending_picture = any(i.get('required', True) and not i['reviewed'] and i['kind'] in ('figures', 'graphics', 'nested_drawing') for i in result['issues'])
+    remaining = [f for f in failures if not (pending_picture and f.get('clause') == '7.3')]
+    substantive = [f for f in remaining if f.get('clause') != '5']
+    blocked = any(i.get('required', True) and not i['reviewed'] and not i.get('reviewable', False) for i in result['issues'])
+    if substantive or blocked or (validator['status'] != 'passed' and not failures):
+        desc = ' '.join(f.get('description', '') for f in substantive).lower()
+        if 'font' in desc or any(i['kind'] in ('fonts', 'unicode') and i.get('required', True) and not i['reviewed'] for i in result['issues']):
+            return tr('A font still needs repair. Export a new PDF from the original file with fonts embedded, then add it here again. If you cannot, save the draft and report for your accessibility office.')
+        return tr('This PDF needs help from your school’s accessibility office. Save the PDF and help report, then give both to the office. The report explains what needs fixing. Your copy will be marked as a draft.')
+    if any(f.get('clause') == '5' for f in remaining):
+        return tr('This PDF needs help from your school’s accessibility office. Save the PDF and help report, then give both to the office. The report explains what needs fixing. Your copy will be marked as a draft.')
     if result.get('brightspace', {}).get('status', 'PDF format checks passed') != 'PDF format checks passed':
-        add('The PDF format check found a problem. The saved report lists the details.')
-    return messages
+        return tr('The PDF format check did not pass. Save the report for your accessibility office and try a fresh export from the original file.')
+    return ''
 
 
 def explanation(item):
@@ -82,4 +73,4 @@ def explanation(item):
     if not needs_attention(item.result):
         return 'Automatic checks passed. You can save this PDF now. Manual review is optional; this is not an accessibility certification.'
     details = reasons(item.result)
-    return '\n'.join('• ' + text for text in details) + '\nThe prepared copy can be saved as a draft. Manual review can add answers and corrections, but cannot override a failed check.'
+    return '\n\n'.join(details) + '\n\nChoose Review now for step-by-step help, or save a draft to finish later.'

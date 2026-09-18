@@ -36,6 +36,15 @@ def metadata(pdf, title, language, retain_claims=False):
                 del meta[key]
 
 
+def pdfua_identification(pdf):
+    """Identify the output's PDF/UA-1 target; validation still decides its status."""
+    with pdf.open_metadata(set_pikepdf_as_editor=False, update_docinfo=False) as meta:
+        meta.register_xml_namespace('http://www.aiim.org/pdfua/ns/id/', 'pdfuaid')
+        for key in list(meta.keys()):
+            if 'pdfua' in key.lower(): del meta[key]
+        meta['pdfuaid:part'] = '1'
+
+
 def render_and_compare(source, output, directory, password='', emit=lambda *a: None, check_text=True):
     pages = []
     with fitz.open(source) as original, fitz.open(output) as prepared:
@@ -129,6 +138,33 @@ def add_ocr(source, destination, issue, fixes, emit):
     return changed
 
 
+def repair_export_defaults(pdf, fixes):
+    """Make documented defaults explicit without replacing fonts or page content."""
+    mapped = set()
+    for obj in pdf.objects:
+        if not isinstance(obj, q.Dictionary) or str(obj.get('/Subtype', '')) != '/Type0':
+            continue
+        if str(obj.get('/Encoding', '')) not in ('/Identity-H', '/Identity-V'):
+            continue
+        for font in obj.get('/DescendantFonts', []):
+            if (str(font.get('/Subtype', '')) == '/CIDFontType2' and
+                    '/CIDToGIDMap' not in font and
+                    '/FontFile2' in font.get('/FontDescriptor', q.Dictionary())):
+                font.CIDToGIDMap = q.Name.Identity
+                mapped.add(str(obj.get('/BaseFont', 'embedded font')))
+    if mapped:
+        fixes.append('Made the default identity glyph mapping explicit for embedded TrueType fonts: ' + ', '.join(sorted(mapped)) + '. No font substitution was used.')
+    layers = pdf.Root.get('/OCProperties', q.Dictionary())
+    configs = [layers.get('/D')] + list(layers.get('/Configs', []))
+    count = 0
+    for config in configs:
+        if isinstance(config, q.Dictionary) and not str(config.get('/Name', '')).strip():
+            config.Name = 'Default view' if count == 0 else f'View {count + 1}'
+            count += 1
+    if count:
+        fixes.append('Added missing names to drawing-layer configurations without changing layer visibility or printing.')
+
+
 def prepare(source, directory, options=None, emit=lambda *a: None):
     options = options or {}
     directory = Path(directory); directory.mkdir(parents=True, exist_ok=True)
@@ -173,6 +209,7 @@ def prepare(source, directory, options=None, emit=lambda *a: None):
             issue('layers', None, 'Drawing layers were preserved. Check the default view, hidden information, print visibility, and whether the description covers each meaningful layer. Layer settings can vary between PDF viewers.', True)
         if '/AcroForm' in pdf.Root:
             issue('forms', None, 'Form fields were preserved. Have an accessibility specialist check field names, instructions, focus order, and behavior.', False)
+        repair_export_defaults(pdf, fixes)
         base = directory / 'base.pdf'
         pdf.save(base, compress_streams=False, object_stream_mode=q.ObjectStreamMode.preserve)
     work = base
@@ -208,7 +245,9 @@ def prepare(source, directory, options=None, emit=lambda *a: None):
         else:
             model = structure.build(pdf, page_text, issue)
             fixes.append('Associated supported text, raster images, vector painting operators, and untagged nested artwork with MCIDs, structure elements, and a ParentTree. Complex reading roles may still need human review.')
-        pdf.save(output, compress_streams=False, object_stream_mode=q.ObjectStreamMode.preserve)
+        pdfua_identification(pdf)
+        fixes.append('Added PDF/UA-1 identification metadata automatically. The final file is checked independently; identification alone is not proof of accessibility.')
+        pdf.save(output, min_version='1.7', compress_streams=False, object_stream_mode=q.ObjectStreamMode.preserve)
     # Reopen to obtain final object numbers after writer renumbering.
     with q.open(output) as pdf:
         final_model = structure.existing_model(pdf)
@@ -337,13 +376,23 @@ def review(result, edits, emit=lambda *a: None):
             with q.open(current) as pdf:
                 metadata(pdf, edits.get('title', result['title']), edits.get('language', result['language']))
                 structure.apply(pdf, edits)
-                pdf.save(candidate, compress_streams=False, object_stream_mode=q.ObjectStreamMode.preserve)
+                pdfua_identification(pdf)
+                pdf.save(candidate, min_version='1.7', compress_streams=False, object_stream_mode=q.ObjectStreamMode.preserve)
         # Compare with the previous known-identical prepared copy, avoiding storing
         # a source password after the initial job.
         pages = render_and_compare(current, candidate, directory, emit=emit, check_text=False)
         validator = validation.validate(candidate, directory / 'validator-review.xml')
         with q.open(candidate) as pdf:
             elements = structure.existing_model(pdf)
+        # Object numbers can change on save; page/MCID identifies an unchanged
+        # content item. Retain readable labels only when this mapping is unique.
+        labels = {}
+        for entry in result['elements']:
+            key = (entry['page'], entry['mcid'], entry['kind'])
+            labels.setdefault(key, []).append(entry['label'])
+        for entry in elements:
+            values = labels.get((entry['page'], entry['mcid'], entry['kind']), [])
+            if len(values) == 1: entry['label'] = values[0]
         # Candidate has been validated; save it immutably and update the pointer.
         result['output'] = str(candidate)
         result['sha256'] = sha256(candidate)

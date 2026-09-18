@@ -13,14 +13,14 @@ from PySide6.QtGui import QDesktopServices, QPixmap, QKeySequence, QShortcut, QF
 from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QProgressBar, QGroupBox, QLineEdit, QFormLayout, QComboBox, QCheckBox, QPlainTextEdit,
-    QScrollArea, QMessageBox, QSpinBox, QSplitter, QBoxLayout)
+    QScrollArea, QMessageBox, QSpinBox, QSplitter, QBoxLayout, QListWidget, QListWidgetItem)
 from .i18n import tr, localize_message, issue_text, populate_languages, LANGUAGES, current_language, set_language
 from .model import Queue
 from . import __version__
 from .validation import resources
 from .batch import run_batch, isolated
 from .saving import save_all
-from .workflow import needs_attention, explanation, reasons
+from .workflow import needs_attention, explanation, reasons, technical_help
 
 
 class Task(QThread):
@@ -63,6 +63,9 @@ class Window(QWidget):
         self.review_drafts = {}; self.loaded_review = None
         self.review_open = False; self.review_all = False
         self.setWindowTitle(f'PDF Accessibility Prep {__version__} — Eathan Huber'); self.resize(1000, 740); self.setMinimumSize(720, 520)
+        self.build_interface()
+
+    def build_interface(self):
         self.setAcceptDrops(True)
         self.setLayoutDirection(Qt.RightToLeft if current_language() == 'ar' else Qt.LeftToRight)
         outer = QVBoxLayout(self)
@@ -72,7 +75,9 @@ class Window(QWidget):
         self.ui_language.setCurrentIndex(max(0, self.ui_language.findData(current_language())))
         self.ui_language.setAccessibleName(tr('App language:'))
         self.ui_language.currentIndexChanged.connect(self.change_ui_language)
-        language_row.addWidget(self.ui_language); language_row.addStretch(); outer.addLayout(language_row)
+        language_row.addWidget(self.ui_language)
+        self.english_button = button('English', lambda: self.apply_ui_language('en'))
+        language_row.addWidget(self.english_button); language_row.addStretch(); outer.addLayout(language_row)
         heading = QLabel(tr('Prepare your PDFs')); self.heading = heading; heading.setStyleSheet('font-size: 24px; font-weight: 600;'); outer.addWidget(heading)
         self.instructions = QLabel(tr('Everything runs on this computer. Manual review opens only when you choose it.'))
         self.instructions.setWordWrap(True); outer.addWidget(self.instructions)
@@ -111,7 +116,7 @@ class Window(QWidget):
         review_layout = QVBoxLayout(self.review_box)
         self.close_review_button = button(tr('Back to files'), self.leave_review); review_layout.addWidget(self.close_review_button)
         self.review_scroll = QScrollArea(); self.review_scroll.setWidgetResizable(True)
-        content = QWidget(); self.review_layout = QVBoxLayout(content)
+        content = QWidget(); self.review_layout = QVBoxLayout(content); self.review_layout.setAlignment(Qt.AlignTop)
         self.review_scroll.setWidget(content); review_layout.addWidget(self.review_scroll)
         split.addWidget(self.review_box); split.setSizes([160, 480])
         self.detail = QLabel(); self.detail.setWordWrap(True); self.detail.setTextFormat(Qt.PlainText)
@@ -120,7 +125,7 @@ class Window(QWidget):
         self.signature = QCheckBox(tr('I authorize creating a derivative that may invalidate this digital signature.'))
         self.retry = button(tr('Continue preparation'), self.retry_item)
         self.review_layout.addWidget(self.password); self.review_layout.addWidget(self.signature); self.review_layout.addWidget(self.retry)
-        self.edit_box = QWidget(); form = QVBoxLayout(self.edit_box)
+        self.edit_box = QWidget(); form = QVBoxLayout(self.edit_box); form.setAlignment(Qt.AlignTop)
         self.metadata_box = QWidget(); metadata = QFormLayout(self.metadata_box); self.title_field = QLineEdit(); self.language = QLineEdit(); self.language.setLayoutDirection(Qt.LeftToRight)
         metadata.addRow(tr('Document &title:'), self.title_field); metadata.addRow(tr('Language code:'), self.language)
         self.language_choice = QComboBox(); populate_languages(self.language_choice, other=True)
@@ -140,10 +145,10 @@ class Window(QWidget):
         self.preview_zoom.setSingleStep(25); self.preview_zoom.setAccessibleName(tr('Page preview zoom percent'))
         self.preview_zoom.valueChanged.connect(self.question_changed); zoom_row.addWidget(self.preview_zoom); zoom_row.addStretch(); form.addWidget(self.zoom_box)
         self.preview = QLabel(); self.preview.setAlignment(Qt.AlignCenter); self.preview.setAccessibleName(tr('Page preview; use the adjacent content list for keyboard review'))
-        self.page_scroll = QScrollArea(); self.page_scroll.setWidget(self.preview); self.page_scroll.setWidgetResizable(True); self.page_scroll.setFixedHeight(200)
+        self.page_scroll = QScrollArea(); self.page_scroll.setWidget(self.preview); self.page_scroll.setWidgetResizable(True); self.page_scroll.setFixedHeight(310)
         form.addWidget(self.page_scroll)
         self.picture_choice = QComboBox(); self.picture_choice.setAccessibleName(tr('Picture or drawing to describe')); self.picture_choice.currentIndexChanged.connect(self.picture_chosen); form.addWidget(self.picture_choice)
-        self.simple_description = QPlainTextEdit(); self.simple_description.setAccessibleName(tr('Describe this picture or drawing')); self.simple_description.setPlaceholderText(tr('Explain what this shows and what the reader needs to know. For drawings, include the view, dimensions, units, and important features.')); self.simple_description.setFixedHeight(170); self.simple_description.textChanged.connect(self.simple_description_changed); form.addWidget(self.simple_description)
+        self.simple_description = QPlainTextEdit(); self.simple_description.setAccessibleName(tr('Describe this picture or drawing')); self.simple_description.setPlaceholderText(tr('Explain what this shows and what the reader needs to know. For drawings, include the view, dimensions, units, and important features.')); self.simple_description.setFixedHeight(270); self.simple_description.textChanged.connect(self.simple_description_changed); form.addWidget(self.simple_description)
         self.picture_panel = QWidget(); picture_layout = QHBoxLayout(self.picture_panel)
         self.preview_side = QWidget(); preview_layout = QVBoxLayout(self.preview_side)
         self.picture_text_box = QWidget(); text_layout = QVBoxLayout(self.picture_text_box)
@@ -152,6 +157,15 @@ class Window(QWidget):
         text_layout.addWidget(self.picture_choice); text_layout.addWidget(self.simple_description); text_layout.addStretch()
         picture_layout.addWidget(self.preview_side, 1); picture_layout.addWidget(self.picture_text_box, 1)
         form.addWidget(self.picture_panel)
+        self.reading_panel = QWidget(); reading_layout = QVBoxLayout(self.reading_panel)
+        reading_layout.addWidget(QLabel(tr('This is the order a screen reader will follow:')))
+        self.reading_items = QListWidget(); self.reading_items.setAccessibleName(tr('Reading sequence')); self.reading_items.setMinimumHeight(180)
+        reading_layout.addWidget(self.reading_items)
+        reading_buttons = QHBoxLayout()
+        self.reading_up = button(tr('Move selected item up'), lambda: self.move_reading_item(-1))
+        self.reading_down = button(tr('Move selected item down'), lambda: self.move_reading_item(1))
+        reading_buttons.addWidget(self.reading_up); reading_buttons.addWidget(self.reading_down); reading_buttons.addStretch()
+        reading_layout.addLayout(reading_buttons); picture_layout.addWidget(self.reading_panel, 1)
         self.advanced_toggle = QCheckBox(tr('More editing tools (optional)')); form.addWidget(self.advanced_toggle)
         self.advanced_box = QWidget(); advanced_form = QVBoxLayout(self.advanced_box); form.addWidget(self.advanced_box); self.advanced_box.hide(); self.advanced_toggle.toggled.connect(self.advanced_box.setVisible)
         self.elements = QTableWidget(0, 5)
@@ -193,6 +207,7 @@ class Window(QWidget):
         self.apply_button = button(tr('Finish review for this PDF'), self.apply_review); navigation_layout.addWidget(self.apply_button)
         self.next_file_button = button(tr('Review next PDF'), self.next_review_file); navigation_layout.addWidget(self.next_file_button)
         review_layout.addWidget(self.navigation_box)
+        self.help_save_button = button(tr('Save PDFs and help reports…'), self.save); self.help_save_button.hide(); review_layout.addWidget(self.help_save_button)
         self.review_layout.addWidget(self.edit_box)
         self.file_summary = QLabel(tr('Drop PDFs here, or choose Add PDFs.')); self.file_summary.setWordWrap(True); self.file_summary.setTextFormat(Qt.PlainText); outer.addWidget(self.file_summary)
         actions = QHBoxLayout(); self.manual_button = button(tr('Manual review…'), self.open_manual_review); self.manual_button.setEnabled(False)
@@ -220,16 +235,43 @@ class Window(QWidget):
         return box.exec()
 
     def change_ui_language(self):
-        code = self.ui_language.currentData()
-        set_language(code, persist=True, activate=False)
-        QMessageBox.information(self, tr('App language:'), tr('Language saved. Close and reopen the app to apply it. Your current session is unchanged.'))
+        self.apply_ui_language(self.ui_language.currentData())
+
+    def apply_ui_language(self, code):
+        if self.busy() or code == current_language(): return
+        self.remember_review()
+        default = self.default_language.currentData()
+        password, signature = self.password.text(), self.signature.isChecked()
+        zoom = self.preview_zoom.value()
+        advanced = self.advanced_toggle.isChecked()
+        scroll = self.review_scroll.verticalScrollBar().value()
+        attention = self.attention_box.isVisible()
+        geometry = self.geometry()
+        self.loaded_review = None
+        set_language(code, persist=True)
+        configure_application(QApplication.instance())
+        # Rebuild labels, not the session: queue, PDFs, corrections, and drafts survive.
+        self.setUpdatesEnabled(False)
+        retired = QWidget(); retired.setLayout(self.layout())
+        self.build_interface()
+        self.default_language.setCurrentIndex(self.default_language.findData(default))
+        self.selection()
+        if attention: self.batch_done(None)
+        self.password.setText(password); self.signature.setChecked(signature)
+        self.preview_zoom.setValue(zoom); self.advanced_toggle.setChecked(advanced)
+        self.review_scroll.verticalScrollBar().setValue(scroll)
+        self.folder_button.setEnabled(bool(self.output_folder))
+        self.setGeometry(geometry)
+        self.primary_actions.setDirection(QBoxLayout.TopToBottom if self.width() < 960 else QBoxLayout.LeftToRight)
+        self.setUpdatesEnabled(True); self.ui_language.setFocus()
+        retired.deleteLater()
 
     def busy(self): return self.task is not None and self.task.isRunning()
     def controls(self, busy):
         for w in (self.add_button, self.clear_button, self.prepare_button, self.save_button, self.apply_button, self.retry): w.setEnabled(not busy)
         self.cancel_button.setEnabled(busy); self.cancel_button.setVisible(busy); self.progress.setVisible(busy)
         self.cancel_button.setText(tr('Cancel review') if self.review_open else tr('Cancel batch'))
-        self.ui_language.setEnabled(not busy); self.default_language.setEnabled(not busy); self.manual_button.setEnabled(not busy and bool(self.active and self.active.result))
+        self.help_save_button.setEnabled(not busy); self.ui_language.setEnabled(not busy); self.english_button.setEnabled(not busy); self.default_language.setEnabled(not busy); self.manual_button.setEnabled(not busy and bool(self.active and self.active.result))
         self.input_button.setEnabled(not busy); self.review_now_button.setEnabled(not busy); self.close_review_button.setEnabled(not busy)
         for r in range(self.files.rowCount()): self.files.cellWidget(r, 2).setEnabled(not busy)
         self.edit_box.setEnabled(not busy)
@@ -379,6 +421,7 @@ class Window(QWidget):
         elif kind == 'save': self.status.setText(tr('Saving {v0} of {v1}', v0=event[1], v1=event[2]))
         elif kind == 'review': self.status.setText(localize_message(str(event[1])))
     def selection(self):
+        self.help_save_button.hide()
         self.set_review_view()
         r = self.files.currentRow()
         if r < 0 or r >= len(self.queue.items):
@@ -414,15 +457,17 @@ class Window(QWidget):
         grouped = []
         for original in result['issues']:
             if not self.review_all and (not original.get('required', True) or original['reviewed']): continue
+            if not original['reviewable']: continue  # Repairs outside the editor are explained once at the end.
             issue = copy.deepcopy(original); issue['ids'] = [issue['id']]
             if issue['kind'] in ('graphics', 'figures', 'nested_drawing'):
                 existing = next((v for v in grouped if v['kind'] == 'pictures' and v['page'] == issue['page']), None)
                 if existing: existing['ids'].append(issue['id']); continue
                 issue['kind'] = 'pictures'
-                issue['message'] = tr('Describe the pictures or drawings on this page. Explain what each shows and what someone who cannot see it needs to know. Include all important labels, dimensions and units. Select each picture below to add its description.')
+                issue['message'] = tr('What should a student learn from this picture? Write that in the box beside the page. Then describe the important shapes, labels and measurements. For a worksheet, explain what the student is asked to do. If there are several drawings, describe each one. You do not need to know any PDF terminology.')
             grouped.append(issue)
-        if result['validator']['status'] != 'passed' or not grouped:
-            grouped.append({'id':'validation-summary', 'ids':[], 'kind':'validation_summary', 'page':None, 'reviewable':False, 'reviewed':False, 'message':explanation(item)})
+        help_text = technical_help(result)
+        if not grouped:
+            grouped.append({'id':'validation-summary', 'ids':[], 'kind':'validation_summary', 'page':None, 'reviewable':False, 'reviewed':False, 'message':help_text or explanation(item)})
         for issue in grouped:
             self.questions.addItem(('Page ' + str(issue['page']) if issue['page'] else tr('Document')) + ' — ' + issue['kind'].replace('_', ' '), issue)
         self.questions.blockSignals(False)
@@ -484,11 +529,19 @@ class Window(QWidget):
         issue = self.questions.currentData()
         if not issue or not self.active or not self.active.result: return
         n = self.questions.currentIndex(); total = self.questions.count()
+        summary = issue['kind'] == 'validation_summary'
+        self.step_label.setVisible(not summary); self.navigation_box.setVisible(not summary)
+        self.help_save_button.setVisible(summary); self.advanced_toggle.setVisible(not summary)
+        if summary:
+            self.heading.setText(tr('Help with this file…'))
+            self.review_box.setTitle(tr('Help with this PDF — ') + Path(self.active.source).name)
+            self.advanced_toggle.setChecked(False); self.advanced_box.hide()
+            self.detail.setText(Path(self.active.source).name + '\n' + tr('There are no questions for you to answer.'))
         titles = {'metadata':tr('Check the document name and language'), 'pictures':tr('Describe the pictures and drawings'), 'reading':tr('Check the reading order'), 'ocr':tr('Check the scanned text'), 'visual_accessibility':tr('Check that the information is clear'), 'layers':tr('Check the drawing layers')}
         title = titles.get(issue['kind'], tr('Check this item') if issue['reviewable'] else tr('This item needs extra help'))
         self.step_label.setText(tr('Step {v0} of {v1}', v0=n + 1, v1=total) + (' • ' + tr('Page {page}', page=issue['page']) if issue['page'] else '') + '\n' + title)
-        messages = {'metadata':tr('Is the name below useful and easy to recognize? Check that the language matches the document.'), 'reading':tr('Read the page from beginning to end. Does the content make sense in that order? If you are unsure, leave this for later. More editing tools are available below if changes are needed.'), 'visual_accessibility':tr('Can the information be understood clearly? Check that text is readable, colors are not the only way to understand something, and pictures have useful explanations.')}
-        self.question.setText(messages.get(issue['kind'], issue_text(issue)) + ('' if issue['reviewable'] else tr('\nYou do not need to fix this here. Leave it for later; it will stay listed in the report.')))
+        messages = {'metadata':tr('Is the name below useful and easy to recognize? Check that the language matches the document.'), 'reading':tr('Compare the numbered list with the page. Select an item and use the up or down button if it should be read earlier or later. When the order makes sense, check the box above. If you are unsure, leave it for later.'), 'visual_accessibility':tr('Can the information be understood clearly? Check that text is readable, colors are not the only way to understand something, and pictures have useful explanations.')}
+        self.question.setText(messages.get(issue['kind'], issue_text(issue)))
         self.metadata_box.setVisible(issue['kind'] == 'metadata')
         self.back_button.setEnabled(n > 0); self.next_button.setEnabled(n < total - 1)
         self.apply_button.setVisible(n == total - 1)
@@ -503,13 +556,22 @@ class Window(QWidget):
         self.picture_choice.setVisible(visible); self.simple_description.setVisible(visible)
         self.picture_text_box.setVisible(visible); self.picture_panel.setVisible(bool(issue['page']) or visible)
         self.picture_chosen()
+        self.reading_panel.setVisible(issue['kind'] == 'reading')
+        self.reading_items.clear()
+        if issue['kind'] == 'reading':
+            for row, entry in enumerate(self.current_elements()):
+                if entry['page'] == issue['page']:
+                    label = (entry.get('alt') or tr('Picture or drawing')) if entry['kind'] == 'figure' else (entry.get('actual_text') or entry['label'])
+                    value = QListWidgetItem(str(self.reading_items.count() + 1) + '. ' + label)
+                    value.setData(Qt.UserRole, row); self.reading_items.addItem(value)
+            self.reading_items.setCurrentRow(0)
         self.page_scroll.setVisible(bool(issue['page'])); self.zoom_box.setVisible(bool(issue['page']))
         self.check.blockSignals(True); self.check.setChecked(all(k in self.reviewed for k in issue.get('ids', [issue['id']])))
         self.check.setEnabled(issue['reviewable']); self.check.blockSignals(False)
         if issue['page']:
             pixmap = QPixmap(str(Path(self.active.result['directory']) / f'page-{issue["page"]}.png'))
             zoom = self.preview_zoom.value() / 100
-            self.preview.setPixmap(pixmap.scaled(int(360 * zoom), int(190 * zoom), Qt.KeepAspectRatio, Qt.SmoothTransformation)); self.preview.show()
+            self.preview.setPixmap(pixmap.scaled(int(500 * zoom), int(300 * zoom), Qt.KeepAspectRatio, Qt.SmoothTransformation)); self.preview.show()
         else: self.preview.hide()
     def record_check(self, checked):
         issue = self.questions.currentData()
@@ -534,6 +596,17 @@ class Window(QWidget):
     def simple_description_changed(self):
         row = self.picture_choice.currentData()
         if row is not None: self.elements.item(row, 3).setText(self.simple_description.toPlainText())
+    def move_reading_item(self, direction):
+        selected = self.reading_items.currentItem()
+        if selected is None: return
+        row = selected.data(Qt.UserRole)
+        target = self.reading_items.currentRow() + direction
+        if target < 0 or target >= self.reading_items.count(): return
+        self.elements.setCurrentCell(row, 0)
+        self.move(direction)
+        self.reading_items.setCurrentRow(target)
+        self.check.setChecked(False)  # A changed order must be checked again.
+
     def review_step(self, offset):
         self.questions.setCurrentIndex(max(0, min(self.questions.count() - 1, self.questions.currentIndex() + offset)))
         self.review_scroll.verticalScrollBar().setValue(0)
@@ -608,8 +681,9 @@ class Window(QWidget):
             self.selection()
             if kind == 'result':
                 self.questions.setCurrentIndex(self.questions.count() - 1)
-                self.step_label.setText(tr('Your answers have been saved'))
-                self.question.setText(tr('Choose Review next PDF to continue, or Back to files to save your prepared PDFs. Anything left for later stays in the report. Use Back if you want to change an answer.'))
+                self.step_label.setText(tr('Your answers have been saved')); self.step_label.show()
+                self.help_save_button.show()
+                self.question.setText(tr('Save your PDFs and reports using the button below. Anything unfinished will be clearly marked as a draft.'))
                 self.check.hide(); self.apply_button.hide(); self.picture_panel.hide(); self.metadata_box.hide()
                 self.advanced_toggle.setChecked(False)
                 self.review_scroll.verticalScrollBar().setValue(0)

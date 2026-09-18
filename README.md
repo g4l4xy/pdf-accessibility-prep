@@ -4,7 +4,7 @@
 
 **Prepare existing PDFs for screen-reader access and accessible delivery through Blackboard and Brightspace.**
 
-[![Download for Windows — version 0.3.0, portable, 64-bit](docs/assets/download-windows.svg)](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe)
+[![Download for Windows — version 0.3.1, portable, 64-bit](docs/assets/download-windows.svg)](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe)
 
 **No installation required.** Download the application and open it on Windows. [Release notes and source code](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest).
 
@@ -51,6 +51,8 @@ PDF Accessibility Prep supports the **document-remediation part of that complian
 
 These capabilities address PDF accessibility techniques described by W3C, including [text alternatives](https://www.w3.org/WAI/WCAG21/Techniques/pdf/PDF1), [reading order](https://www.w3.org/WAI/WCAG21/Techniques/pdf/PDF3), and [OCR for scanned documents](https://www.w3.org/WAI/WCAG21/Techniques/pdf/PDF7). Results still depend on the source PDF, the corrections made, and the student's PDF reader and assistive technology.
 
+PDF/UA-1 identification is added automatically during preparation and refreshed after edits. The app then validates the final PDF. Identification by itself does not prove accessibility; unresolved issues keep the file marked as a draft.
+
 ## 🚀 Three steps from course files to prepared PDFs
 
 1. **Add PDFs.** Select several files at once or drag them into the window. Add more, remove individual files, or clear the list before starting.
@@ -64,6 +66,8 @@ For example, `Week_1_Reading.pdf` becomes `Week_1_Reading_prepared.pdf`, with a 
 ### Human review only when you choose it
 
 A PDF that passes the automatic checks does not require a generic manual checklist before saving. If something remains unresolved, one message explains the problem and offers **Review now** or **Not now — keep drafts**. The rest of the batch continues normally.
+
+Technical failures are not presented as questions for you to solve. If there are no questions you can answer, the app offers **Save PDFs and help reports…** and tells you what to do next.
 
 Choose **Manual review…** whenever you want a closer look. The review view focuses on one question at a time, keeps answers when you move between files, and has a clear **Back to files** button. Missing descriptions, uncertain recognized text, or complex structures remain flagged until appropriately addressed. Failed validation cannot be changed to a pass by checking a box.
 
@@ -82,7 +86,7 @@ Compatibility guidance is based on official platform documentation and local fil
 
 ## 🌍 Use the app in your language
 
-Choose **App language** at the top of the window. The app remembers your choice; close and reopen it to apply the change. On first launch, it uses a supported Windows language, with English as the fallback.
+The app starts in **English** on a fresh installation. Choose **App language** at the top of the window to switch immediately—no restart is needed. Your queue, prepared files, and unfinished review answers stay in place. The app remembers languages you explicitly choose. An always-visible **English** button switches back immediately. Version 0.3.1 ignores the older 0.3.0 language preference to recover from an unintended Arabic startup.
 
 **12 interface languages:** English, Español, Français, Deutsch, Português, Italiano, Nederlands, Polski, العربية, हिन्दी, 简体中文, and 日本語.
 
@@ -98,13 +102,13 @@ Each saved report identifies the source document, the preparation performed, the
 
 ## ✅ Verification you can inspect
 
-Version **0.3.0** passed **69 final Windows interface tests**, including **53 localization checks**, plus **18 checks inside the packaged executable**. The existing 51 Windows regression cases also passed; 16 of their UI checks were repeated in the final run. Local testing passed an initial 92-test suite and 69 final interface checks. Coverage includes translated counts, language preferences, separate PDF metadata, right-to-left review navigation, narrow windows, and non-Latin glyphs. Windows testing used Windows 11 ARM64 in Parallels with x64 emulation. See the test record for overlapping runs and the corrected UTF-8 source-audit test. These automated checks do not establish native-speaker translation approval or manual screen-reader acceptance.
+Version **0.3.1** passed a **126-test local suite**, followed by **91 final interface, language, and repair tests locally and on Windows** after the final layout adjustments. The executable passed **23 packaged checks**. Coverage includes English startup, immediate language switching, queued-file and review-answer retention, automatic font/layer repairs, automatic PDF/UA identification, clear save actions, and continued draft status for unresolved issues. A normal Windows launch displayed English; an interactive-desktop check observed no new console windows during the packaged self-test. Windows testing used Windows 11 ARM64 in Parallels with x64 emulation. Counts overlap; these runs are not additional independent full suites. See the [test record](docs/TESTING.md) for scope and limits.
 
 Batch verification includes **1, 10, 50, and 100 PDFs**, duplicate filenames, damaged input, and checks that each successful output retains its own original page count and page order. Read the [test record](docs/TESTING.md), [coverage limits](docs/COVERAGE.md), and [automatic-workflow notes](docs/AUTOMATIC-WORKFLOW.md).
 
 ## 💻 Getting the Windows application
 
-[**Download PDF Accessibility Prep for Windows**](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe) — version 0.3.0, 64-bit, approximately 155 MB.
+[**Download PDF Accessibility Prep for Windows**](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe) — version 0.3.1, 64-bit, approximately 155 MB.
 
 Download the `.exe`, open it, and add your PDFs. No installer, Python setup, or account is required. The portable application bundles its normal PDF, OCR, and validation runtime components. The [release page](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest) includes the application source and SHA-256 checksums.
 
