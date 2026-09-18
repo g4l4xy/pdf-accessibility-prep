@@ -1,5 +1,14 @@
 # Changes
 
+## 0.3.0
+
+- Add 12 offline interface languages, a saved language preference, and first-launch system-language selection with English fallback.
+- Translate batch controls, progress, review guidance, and accessible labels while preserving document content and machine validation states.
+- Add Arabic right-to-left layout, bundled non-Latin fonts, and stacked primary actions for narrow windows.
+- Expand the separate PDF language menu; clearly distinguish metadata from interface translation and English-only OCR.
+- Verify 92 local tests, 51 Windows regressions, 69 final Windows interface checks, and 18 packaged checks. Initial translations still welcome native-speaker review.
+
+
 ## 0.2.0 — Automatic preparation first
 
 - Make generic metadata, visual, and supported reading-order checks optional instead of marking every PDF as needing manual review.

@@ -28,4 +28,6 @@ Exact downloaded resource URLs and checksums are recorded in `dependencies.lock.
 
 A general upstream project link is not, by itself, a declaration that every corresponding-source obligation has been fulfilled. Distributors must provide the exact corresponding source and required build materials for their actual covered binaries through a method permitted by each applicable license. Preserve the Qt replacement/rebuilding rights and third-party notices. Retain the JRE legal directory and wheel-provided component notices. Review native transitive dependencies as well as Python wrappers.
 
-The Windows 0.2.0 release provides the executable, matching application source archive, build materials, dependency source links above, license notices, and SHA-256 checksums together on the GitHub release page. The source archive includes pinned dependency versions and exact resource URLs in `dependencies.lock.json`.
+The Windows 0.3.0 release provides the executable, matching application source archive, build materials, dependency source links above, license notices, and SHA-256 checksums together on the GitHub release page. The source archive includes pinned dependency versions and exact resource URLs in `dependencies.lock.json`.
+
+Additional interface fonts in 0.3.0 come from the immutable Google Fonts repository revision recorded in `dependencies.lock.json` under `interface_fonts`. Each entry provides its exact source font URL, SHA-256 hash, and license URL. OFL notices are included in the application source and bundled resources.

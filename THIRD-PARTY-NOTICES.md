@@ -23,3 +23,5 @@ Full copied license texts and wheel-provided notices are under `resources/licens
 Qt dynamic libraries remain bundled as separate libraries during runtime extraction. The complete source, spec, pinned requirements and build script permit rebuilding with a compatible modified Qt/PySide distribution. Do not prohibit reverse engineering needed for debugging modified LGPL libraries. An end-user's ordinary use does not require buying a commercial Qt or MuPDF license; redistributors must comply with the applicable open-source terms.
 
 Before public distribution of a Windows binary, complete the Windows build's notice collection and retain the source package and upstream corresponding-source access for the exact bundled versions. This notice is not a certified licensing audit. Consult the test record for the release verification status.
+
+The 0.3.0 interface additionally bundles Noto Sans Arabic, Noto Sans Devanagari, Noto Sans SC, and Noto Sans JP under SIL OFL 1.1. Exact source revision, resource URLs, and hashes are pinned in `dependencies.lock.json` under `interface_fonts`; each font family’s OFL notice is included in `resources/licenses`.

@@ -34,3 +34,15 @@ The required batch tests verify that every successful output retains its own pag
 Windows screenshots in this update come from the actual Qt interface rendered offscreen in Windows 11 / Parallels with the bundled font. They were visually inspected; they are not a claim of a manual native walkthrough or screen-reader acceptance. The final font is deliberately loaded from the app's bundled Noto Sans resource to avoid unavailable platform-font fallbacks.
 
 No new offline, pristine native-x64, screen-reader, or institutional Brightspace upload test is claimed. See [the workflow notes](AUTOMATIC-WORKFLOW.md) for the exact behavior and limits. Public source changed only in documentation/evidence after these checks, apart from the visually inspected final label simplification described above.
+
+
+## Version 0.3.0 — translated interfaces
+
+- Initial full local suite, before the final RTL selection fix: **92 passed** (`languages-local.xml`).
+- Windows: **51 existing regression cases passed** in the full run, including batches of 1, 10, 50, and 100 PDFs, mixed fixtures, duplicates, damaged input, and page count/order checks. **69 final interface cases passed** (53 localization and 16 existing UI checks) in the final focused run (`languages-windows-final.xml`). Environment: Windows 11 ARM64 in Parallels using x64 emulation.
+- The initial Windows run (`languages-windows-initial.xml`) exposed a test-harness error: the catalog source audit used the legacy Windows encoding instead of explicit UTF-8. The application already read catalogs as UTF-8. A subsequent visual review also found that Qt row selection could skip the first file in an RTL window. The app now sets the current cell explicitly; 12 additional tests verify that Review now opens the first file without a prior click. Final runs of all 53 localization cases plus 16 existing UI cases passed both locally and on Windows (`languages-local-final.xml`, `languages-windows-final.xml`). The 51 regression plus 53 localization cases represent 104 distinct passing cases across these runs, not a single final full-suite run.
+- Packaged executable: **18 checks passed**, including complete language catalogs, translated window construction with independent PDF language metadata, and interface glyph rendering (`languages-packaged.json`).
+- Source and catalog hashes matched the Windows build (`languages-source-manifest.json`). Executable identity is in `languages-executable-manifest.json`.
+- Source tests include **53 localization checks** across 12 languages. These overlap with the full suite; do not add their counts to claim distinct tests.
+- Rendered Windows overview/review images were inspected for Arabic, Hindi, Japanese, and longer German labels. Arabic direction and non-Latin glyphs are covered automatically as well.
+- No new offline test, native x64 hardware run, live LMS upload, full native-speaker review, or manual screen-reader acceptance is claimed. OCR remains English-only; reports and detailed validator diagnostics remain English.

@@ -1,0 +1,29 @@
+{
+  "version": "0.3.0",
+  "filename": "PDF-Accessibility-Prep-Windows-x64.exe",
+  "sha256": "492bcd0a40e3550c404f24e2e086f0ee75f9bb3d83017318adc174f7ba9176ed",
+  "size_bytes": 154665885,
+  "languages": [
+    "en",
+    "es",
+    "fr",
+    "de",
+    "pt",
+    "it",
+    "nl",
+    "pl",
+    "ar",
+    "hi",
+    "zh",
+    "ja"
+  ],
+  "local_initial_tests": 92,
+  "local_final_ui_tests": 69,
+  "windows_regression_tests": 51,
+  "windows_localization_tests": 53,
+  "windows_final_ui_tests": 69,
+  "packaged_checks": 18,
+  "test_environment": "Windows 11 ARM64 in Parallels; x64 emulation",
+  "native_speaker_review_complete": false,
+  "new_offline_or_manual_screen_reader_test": false
+}

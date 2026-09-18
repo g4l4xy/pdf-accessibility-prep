@@ -4,7 +4,7 @@
 
 **Prepare existing PDFs for screen-reader access and accessible delivery through Blackboard and Brightspace.**
 
-[![Download for Windows — version 0.2.0, portable, 64-bit](docs/assets/download-windows.svg)](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe)
+[![Download for Windows — version 0.3.0, portable, 64-bit](docs/assets/download-windows.svg)](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe)
 
 **No installation required.** Download the application and open it on Windows. [Release notes and source code](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest).
 
@@ -80,6 +80,16 @@ The app produces ordinary `.pdf` files for your institution's course-content wor
 
 Compatibility guidance is based on official platform documentation and local file checks. No live Blackboard or Brightspace course upload is claimed. Institutional upload limits, permissions, viewers, and course settings can vary. The project is independent and is not endorsed or certified by either platform.
 
+## 🌍 Use the app in your language
+
+Choose **App language** at the top of the window. The app remembers your choice; close and reopen it to apply the change. On first launch, it uses a supported Windows language, with English as the fallback.
+
+**12 interface languages:** English, Español, Français, Deutsch, Português, Italiano, Nederlands, Polski, العربية, हिन्दी, 简体中文, and 日本語.
+
+The translated interface includes the batch workflow, review guidance, buttons, status messages, and accessible labels. Arabic uses a right-to-left layout. Additional fonts are bundled for Arabic, Hindi, Chinese, and Japanese. Translations are included in the download and work without an online translation service.
+
+Changing the interface language does **not** translate document content. The separate PDF language setting writes missing language metadata; OCR remains English-only. Saved reports and detailed validator diagnostics remain in English, and operating-system file dialogs may follow the Windows display language. These are initial translations, not professionally certified translations; corrections from fluent speakers are welcome. See [language support and contribution instructions](docs/LANGUAGES.md).
+
 ## 🔒 Local processing, useful records
 
 Documents are processed on the computer running the app. No document upload to a project server, account, or API key is required for processing.
@@ -88,13 +98,13 @@ Each saved report identifies the source document, the preparation performed, the
 
 ## ✅ Verification you can inspect
 
-The automatic-first update passed **48 Windows regression tests**, **16 focused Windows UI tests**, and **15 checks inside the packaged Windows executable**. These runs include overlapping coverage; they are not a single combined test count.
+Version **0.3.0** passed **69 final Windows interface tests**, including **53 localization checks**, plus **18 checks inside the packaged executable**. The existing 51 Windows regression cases also passed; 16 of their UI checks were repeated in the final run. Local testing passed an initial 92-test suite and 69 final interface checks. Coverage includes translated counts, language preferences, separate PDF metadata, right-to-left review navigation, narrow windows, and non-Latin glyphs. Windows testing used Windows 11 ARM64 in Parallels with x64 emulation. See the test record for overlapping runs and the corrected UTF-8 source-audit test. These automated checks do not establish native-speaker translation approval or manual screen-reader acceptance.
 
 Batch verification includes **1, 10, 50, and 100 PDFs**, duplicate filenames, damaged input, and checks that each successful output retains its own original page count and page order. Read the [test record](docs/TESTING.md), [coverage limits](docs/COVERAGE.md), and [automatic-workflow notes](docs/AUTOMATIC-WORKFLOW.md).
 
 ## 💻 Getting the Windows application
 
-[**Download PDF Accessibility Prep for Windows**](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe) — version 0.2.0, 64-bit, approximately 137 MB.
+[**Download PDF Accessibility Prep for Windows**](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest/download/PDF-Accessibility-Prep-Windows-x64.exe) — version 0.3.0, 64-bit, approximately 155 MB.
 
 Download the `.exe`, open it, and add your PDFs. No installer, Python setup, or account is required. The portable application bundles its normal PDF, OCR, and validation runtime components. The [release page](https://github.com/g4l4xy/pdf-accessibility-prep/releases/latest) includes the application source and SHA-256 checksums.
 

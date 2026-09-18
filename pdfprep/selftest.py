@@ -3,6 +3,7 @@
 """Packaged integration test: no installed Java, OCR, or Python may be required."""
 from pathlib import Path
 import json
+import os
 import sys
 import tempfile
 import threading
@@ -65,7 +66,25 @@ def main():
             window.loaded_review = None; window.review_drafts.clear()
             for item in window.queue.items: item.saved_hash = item.result['sha256']
             window.close()
-            output = root / 'output'; output.mkdir()
+            from .i18n import LANGUAGES, catalog, tr
+            from PySide6.QtGui import QTextLayout
+            old_language = os.environ.get('PDFPREP_UI_LANGUAGE')
+            try:
+                checks['all_language_catalogs_bundled'] = all(set(catalog(code)) == set(catalog('en')) and len(catalog(code)) >= 155 for code in LANGUAGES)
+                localized = []; glyphs = []
+                for code in LANGUAGES:
+                    os.environ['PDFPREP_UI_LANGUAGE'] = code
+                    translated = Window(); translated.show(); app.processEvents()
+                    localized.append(translated.heading.text() == tr('Prepare your PDFs') and translated.default_language.currentData() == 'en')
+                    layout = QTextLayout(translated.heading.text(), translated.font()); layout.beginLayout(); layout.createLine(); layout.endLayout()
+                    glyphs.append(bool(layout.glyphRuns()) and all(0 not in run.glyphIndexes() for run in layout.glyphRuns()))
+                    translated.close()
+                checks['translated_interfaces_keep_pdf_language_separate'] = all(localized)
+                checks['translated_interface_glyphs'] = all(glyphs)
+            finally:
+                if old_language is None: os.environ.pop('PDFPREP_UI_LANGUAGE', None)
+                else: os.environ['PDFPREP_UI_LANGUAGE'] = old_language
+            output = root / 'output' ; output.mkdir()
             saved, failed = save_all(queue.items, output)
             checks['save_all_pdf_and_report'] = len(saved) == 3 and not failed and all(Path(p).exists() for _, paths in saved for p in paths)
     except Exception as ex:

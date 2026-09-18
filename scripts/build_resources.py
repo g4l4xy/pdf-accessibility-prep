@@ -86,6 +86,9 @@ def main():
     (RESOURCES / 'tessdata').mkdir(exist_ok=True)
     shutil.copyfile(download('eng.traineddata', lock['eng']), RESOURCES / 'tessdata/eng.traineddata')
     shutil.copyfile(download('NotoSans-Regular.ttf', lock['font']), RESOURCES / 'NotoSans-Regular.ttf')
+    (RESOURCES / 'fonts').mkdir(exist_ok=True)
+    for name, item in lock.get('interface_fonts', {}).items():
+        shutil.copyfile(download(name, item), RESOURCES / 'fonts' / name)
     (RESOURCES / 'build-manifest.json').write_text(json.dumps(lock, indent=2), encoding='utf-8')
     # Verify UA profile selection before packaging; a PDF/A-only tool cannot pass this gate.
     cmd = [str(java), '-cp', str(target / 'bin/*'), 'org.verapdf.apps.GreenfieldCliWrapper', '--version']

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Plain-language explanations shared by the automatic-first desktop workflow."""
 
+from .i18n import current_language, tr, issue_text
+
 def needs_attention(result):
     return bool(result and (result['validator']['status'] != 'passed' or
         result.get('brightspace', {}).get('status', 'PDF format checks passed') != 'PDF format checks passed' or
@@ -9,6 +11,13 @@ def needs_attention(result):
 
 
 def reasons(result):
+    if current_language() != 'en':
+        messages = list(dict.fromkeys(issue_text(i) for i in result['issues'] if i.get('required', True) and not i['reviewed']))
+        if result['validator']['status'] != 'passed':
+            messages.append(tr('The validation tool could not finish. See technical details.' if result['validator']['status'] == 'not performed' else 'The independent accessibility check did not pass. See the report.'))
+        if result.get('brightspace', {}).get('status', 'PDF format checks passed') != 'PDF format checks passed':
+            messages.append(tr('The independent accessibility check did not pass. See the report.'))
+        return list(dict.fromkeys(messages))
     messages = []
     def add(message):
         if message not in messages: messages.append(message)
@@ -58,6 +67,12 @@ def reasons(result):
 
 
 def explanation(item):
+    if current_language() != 'en':
+        if not item.result:
+            message = {'Password needed':'This PDF is locked. Provide an authorized password.', 'Signature consent needed':'This PDF is signed. Permission is needed to create a changed copy.', 'Failed':'This PDF could not be prepared. Try a fresh export. Other PDFs can still be saved.'}.get(item.status, 'This PDF is waiting to be prepared.')
+            return tr(message) + ('\n' + tr('Technical details (original language):') + '\n' + item.error if item.error else '')
+        if not needs_attention(item.result): return tr('Automatic checks passed. You can save this PDF. This is not an accessibility certification.')
+        return '\n'.join('• ' + m for m in reasons(item.result)) + '\n' + tr('Unresolved issues remain. You can save a draft; review cannot override failed validation.')
     if not item.result:
         if item.status == 'Password needed': return 'This PDF is locked. An authorized password is needed before it can be prepared.'
         if item.status == 'Signature consent needed': return 'This PDF is digitally signed. Your permission is needed before creating a changed copy.'
